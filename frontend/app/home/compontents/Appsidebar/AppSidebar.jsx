@@ -1,24 +1,12 @@
 "use client"
 
 import {
-  Brain,
-  PenTool,
   GraduationCap,
-  MessageSquare,
   ChevronDown,
-  Home,
-  BookOpen,
-  Users,
-  Calendar,
   Settings,
-  Search,
   User,
-  BarChart3,
-  FileText,
-  Award,
 } from "lucide-react"
 import navigationData from "./menu"
-import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -40,15 +28,6 @@ import {
   SidebarRail,
   SidebarFooter,
 } from "@/components/ui/sidebar"
-
-
-
-
-
-
-
-
-
 function AppSidebar() {
   return (
       <Sidebar collapsible="icon">
