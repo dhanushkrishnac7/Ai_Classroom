@@ -1,8 +1,10 @@
 "use client"
 import Classes from "./compontents/Classes/classes"
+import { useEffect } from "react"
+import { useRouter } from "next/navigation"
+import { supabase } from "../libs/supabaseclient"
 import {
   Brain,
-  Plus,
   Clock,
   CheckCircle,
   PenTool,
@@ -14,38 +16,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
-import { Separator } from "@/components/ui/separator"
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb"
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
-  SidebarHeader,
-  SidebarInput,
-  SidebarInset,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarProvider,
-  SidebarRail,
-  SidebarTrigger,
-  SidebarFooter,
-} from "@/components/ui/sidebar"
-
-
-
-
-
-
+import { SidebarInset,SidebarProvider} from "@/components/ui/sidebar"
 
 const assignments = [
   {
@@ -73,7 +44,6 @@ const assignments = [
     timeLeft: "7 days",
   },
 ]
-
 const studyPlan = [
   {
     time: "9:00 AM",
@@ -110,8 +80,8 @@ const studyPlan = [
 ]
 
 
-
 export default function HomePage() {
+
   return (
     <SidebarProvider>
       

@@ -77,6 +77,23 @@
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
 }
+/* Custom shadow with blue and purple */
+/* in your global.css or tailwind.css */
+.gradient-shadow {
+  position: relative;
+  transition: box-shadow 0.3s ease;
+}
+
+
+
+.card-gradient-hover {
+  transition: all 0.3s ease;
+}
+
+.card-gradient-hover:hover {
+  background: linear-gradient(135deg, #7dd3fc, #67e8f9, #5eead4);
+}
+
 
 .dark {
   --background: oklch(0.145 0 0);
