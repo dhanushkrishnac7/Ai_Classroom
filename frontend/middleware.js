@@ -5,6 +5,7 @@ const JWT_SECRET = new TextEncoder().encode(process.env.SUPABASE_JWT)
 
 export async function middleware(req) {
   const token = req.cookies.get('token')?.value
+  console.log("Received token:", token)
   if (!token) {
     return NextResponse.redirect(new URL('/', req.url))
   }
