@@ -9,4 +9,4 @@ router = APIRouter()
 
 @router.get("/dashboard")
 async def get_dashboard(token = Depends(verify_token)):
-    print(token)
+    print(token["sub"])
