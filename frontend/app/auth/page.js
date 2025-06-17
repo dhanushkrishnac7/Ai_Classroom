@@ -1,24 +1,44 @@
 "use client"
 import { useEffect } from "react"
 import { useRouter } from "next/navigation"
-import {supabase} from '../libs/supabaseclient'
+import { supabase } from '../libs/supabaseclient'
 import { Card, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import {Loader2} from "lucide-react"
+import { Loader2 } from "lucide-react"
+
 export default function CallbackPage() {
   const router = useRouter()
   const threeHoursLater = new Date(Date.now() + 3 * 60 * 60 * 1000);
+
   useEffect(() => {
+    // Listen for auth state changes
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.access_token) {
+        // Update cookie when token changes
+        document.cookie = `token=${session.access_token}; expires=${threeHoursLater.toUTCString()}; path=/; secure; samesite=strict`
+        console.log("Token updated in cookies")
+      } else {
+        // Clear token when logged out
+        document.cookie = 'token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT'
+        console.log("Token cleared from cookies")
+      }
+    })
+
     const setSession = async () => {
-      const {data: { session },error,} = await supabase.auth.getSession()
+      const { data: { session }, error } = await supabase.auth.getSession()
+      
       if (error) {
         console.error("Session fetch error:", error.message)
         return router.push("/")
       }
-      console.log("im in the callback page", session)
+
+      console.log("Current session:", session)
       if (session) {
-        document.cookie = `token=${session.access_token}; expires=${threeHoursLater.toUTCString()}; path=/`
-        console.log("/dashboard")
+        // Initial token setup
+        document.cookie = `token=${session.access_token}; expires=${threeHoursLater.toUTCString()}; path=/; secure; samesite=strict`
+        console.log("Redirecting to dashboard")
         router.push("/dashboard")
       } else {
         router.push("/")
@@ -26,7 +46,12 @@ export default function CallbackPage() {
     }
 
     setSession()
-  }, [])
+
+    // Cleanup subscription on unmount
+    return () => {
+      subscription.unsubscribe()
+    }
+  }, [router])
 
   return (
     <div className="min-h-screen bg-background">
