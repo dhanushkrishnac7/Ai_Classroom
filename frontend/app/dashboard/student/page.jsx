@@ -38,6 +38,11 @@ export default function StudentForm() {
     }
   }
 
+  const validateEmail = (email) => {
+    const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    return re.test(email)
+  }
+
   const validatePage = (page) => {
     const newErrors = {}
 
@@ -45,8 +50,16 @@ export default function StudentForm() {
       if (!formData.firstName.trim()) newErrors.firstName = "First name is required"
       if (!formData.lastName.trim()) newErrors.lastName = "Last name is required"
       if (!formData.age.trim()) newErrors.age = "Age is required"
-      if (!formData.email.trim()) newErrors.email = "Email is required"
-      if (!formData.phone.trim()) newErrors.phone = "Phone number is required"
+      if (!formData.email.trim()) {
+        newErrors.email = "Email is required"
+      } else if (!validateEmail(formData.email)) {
+        newErrors.email = "Please enter a valid email address"
+      }
+      if (!formData.phone.trim()) {
+        newErrors.phone = "Phone number is required"
+      } else if (!/^\d{10}$/.test(formData.phone.replace(/\D/g, ''))) {
+        newErrors.phone = "Please enter a valid 10-digit phone number"
+      }
     }
 
     if (page === 2) {
@@ -70,11 +83,66 @@ export default function StudentForm() {
     setCurrentPage((prev) => Math.max(prev - 1, 1))
   }
 
-  const handleSubmit = () => {
-    if (validatePage(2)) {
-      // Validate required fields from previous pages
-      console.log("Form submitted:", formData)
-      alert("Form submitted successfully!")
+  const handleSubmit = async () => {
+    if (validatePage(currentPage)) {
+      try {
+        // Validate email format
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+          setErrors(prev => ({ ...prev, email: "Please enter a valid email address" }))
+          return
+        }
+
+        // Validate phone number format
+        if (!/^\d{10}$/.test(formData.phone.replace(/\D/g, ''))) {
+          setErrors(prev => ({ ...prev, phone: "Please enter a valid 10-digit phone number" }))
+          return
+        }
+
+        // Add loading state if needed
+        // setIsLoading(true)
+
+        // Here you would typically send the data to your backend
+        const response = await fetch('/api/students', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(formData)
+        })
+
+        if (!response.ok) {
+          throw new Error('Failed to submit form')
+        }
+
+        // Show success message
+        alert("Form submitted successfully! We'll get back to you soon.")
+        
+        // Reset form
+        setFormData({
+          firstName: "",
+          lastName: "",
+          age: "",
+          email: "",
+          phone: "",
+          university: "",
+          academicStatus: "",
+          fieldOfStudy: "",
+          currentYear: "",
+          gpa: "",
+          previousEducation: "",
+          careerGoals: "",
+          additionalInfo: "",
+        })
+        
+        // Reset to first page
+        setCurrentPage(1)
+        
+      } catch (error) {
+        console.error('Form submission error:', error)
+        alert("Something went wrong. Please try again.")
+      } finally {
+        // setIsLoading(false)
+      }
     }
   }
 

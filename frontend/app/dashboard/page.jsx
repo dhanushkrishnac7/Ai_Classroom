@@ -1,6 +1,6 @@
 "use client"
 import Classes from "./compontents/Classes/classes"
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../libs/supabaseclient"
 import {
@@ -80,8 +80,31 @@ const studyPlan = [
 ]
 
 
-export default function HomePage() {
 
+export default function HomePage() {
+const [showstudentform , setshowstudentform] = useState(false);
+useEffect(()=>{
+  const fetch = async ()=>{
+    console.log("get token.....")
+    const token = document.cookie
+      .split('; ')
+      .find(row => row.startsWith('token='))
+      ?.split('=')[1]
+    console.log("now fetching")
+    const res = await fetch("https://localhost:8000/dasboard",{
+      method:'GET',
+      headers:{
+        'Authorization':`Bearer ${token}`,
+        'Content-Type': 'application/json',
+      }
+    })
+    console.log("got it")
+    if(res.status === 440){
+      setshowstudentform(true);
+    }
+    
+  } 
+fetch()},[])
   return (
     <SidebarProvider>
       

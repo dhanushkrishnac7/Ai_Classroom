@@ -89,6 +89,9 @@ export function AuthModal({ isOpen, onClose, type, onSwitchType }) {
       console.log("OAuth login clicked")
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: p,
+        options: {
+          redirectTo: 'http://localhost:3000/auth',
+        },
       
       })
       
