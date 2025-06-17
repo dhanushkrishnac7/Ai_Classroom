@@ -1,10 +1,10 @@
-from fastapi import FastAPI, Depends, HTTPException, status, Request
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 from app.services.auth_middle import verify_token
 from app.api.routes import dashboard
-from app.api.routes.exception_handler import router as exception_handler_router
+from app.api.routes.exception_handler import http_exception_handler
 
 app = FastAPI()
 
 app.include_router(dashboard.router, prefix="", tags=["Users"])
-app.add_exception_handler(HTTPException, exception_handler_router)
+app.add_exception_handler(HTTPException, http_exception_handler)
