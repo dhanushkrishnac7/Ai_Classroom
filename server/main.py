@@ -1,21 +1,24 @@
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse
-from app.services.auth_middle import verify_token
+from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import dashboard
 from app.api.routes.exception_handler import http_exception_handler
 from fastapi.middleware.cors import CORSMiddleware
 app = FastAPI()
 
 origins = [
-    "http://localhost:3000",  # Next.js frontend URL
+
+
+    "http://localhost:3000"
+
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,       # Allow frontend origin(s)
+
+    allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"],         # Allow all HTTP methods
-    allow_headers=["*"],         # Allow all headers
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 app.include_router(dashboard.router, prefix="", tags=["Users"])
