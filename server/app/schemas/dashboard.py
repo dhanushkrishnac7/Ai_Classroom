@@ -9,8 +9,8 @@ class EnrolledClassroom(BaseModel):
 class DashboardResponse(BaseModel):
     message: str = Field(..., description="Response message")
     owned_classrooms: Optional[List[str]] = Field(default_factory=list, alias="ownedClassrooms", description="Classrooms created by the user")
-    enrolled_classrooms: Optional[List[EnrolledClassroom]] = Field(default_factory=list, alias="enrolledClassrooms", description="Classrooms the user is enrolled in with owner names")
-
+    enrolled_as_admins: Optional[List[EnrolledClassroom]] = Field(default_factory=list, alias="enrolledClassroomsAsAdmins", description="Classrooms the user is enrolled as admin")
+    enrolled_as_students: Optional[List[EnrolledClassroom]] = Field(default_factory=list, alias="enrolledClassroomsAsStudents", description="Classrooms the user is enrolled as student")
 
 class UserProfile(BaseModel):
     user_name: str = Field(..., alias="userName",description="Username of the user")
