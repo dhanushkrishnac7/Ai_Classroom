@@ -1,8 +1,7 @@
 "use client"
 import Classes from "./compontents/Classes/classes"
 import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
-import { supabase } from "../libs/supabaseclient"
+import StudentForm from "./student/studentForm"
 import {
   Brain,
   Clock,
@@ -79,19 +78,17 @@ const studyPlan = [
   },
 ]
 
-
-
 export default function HomePage() {
 const [showstudentform , setshowstudentform] = useState(false);
 useEffect(()=>{
-  const fetch = async ()=>{
+  const fetchdata = async ()=>{
     console.log("get token.....")
     const token = document.cookie
       .split('; ')
       .find(row => row.startsWith('token='))
       ?.split('=')[1]
-    console.log("now fetching")
-    const res = await fetch("https://localhost:8000/dasboard",{
+    console.log(token ,"now fetching")
+    const res = await fetch("http://localhost:8000/dashboard",{
       method:'GET',
       headers:{
         'Authorization':`Bearer ${token}`,
@@ -104,8 +101,10 @@ useEffect(()=>{
     }
     
   } 
-fetch()},[])
+fetchdata()},[])
   return (
+    <>
+    <StudentForm open={showstudentform} onOpenChange={setshowstudentform} />
     <SidebarProvider>
       
       <SidebarInset>
@@ -237,5 +236,7 @@ fetch()},[])
         </div>
       </SidebarInset>
     </SidebarProvider>
+    
+    </>
   )
 }

@@ -1,20 +1,21 @@
 "use client"
 
 import { useState } from "react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { Progress } from "@/components/ui/progress"
 import { ChevronLeft, ChevronRight, User, GraduationCap, FileText } from "lucide-react"
-
-export default function StudentForm() {
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Check, Loader2, X } from "lucide-react"
+export default function StudentForm({ open, onOpenChange }) {
   const [currentPage, setCurrentPage] = useState(1)
+    const [buttonState, setButtonState] = useState("idle")
   const [formData, setFormData] = useState({
     firstName: "",
-    lastName: "",
+    username:"",
     age: "",
     email: "",
     phone: "",
@@ -57,7 +58,7 @@ export default function StudentForm() {
       }
       if (!formData.phone.trim()) {
         newErrors.phone = "Phone number is required"
-      } else if (!/^\d{10}$/.test(formData.phone.replace(/\D/g, ''))) {
+      } else if (!/^\d{10}$/.test(formData.phone.replace(/\D/g, ""))) {
         newErrors.phone = "Please enter a valid 10-digit phone number"
       }
     }
@@ -83,41 +84,58 @@ export default function StudentForm() {
     setCurrentPage((prev) => Math.max(prev - 1, 1))
   }
 
+  const isFormComplete = () => {
+    const requiredFields = [
+      "firstName",
+      "lastName",
+      "age",
+      "email",
+      "phone",
+      "university",
+      "academicStatus",
+      "fieldOfStudy",
+      "currentYear",
+    ]
+
+    return (
+      requiredFields.every((field) => formData[field].trim() !== "") &&
+      validateEmail(formData.email) &&
+      /^\d{10}$/.test(formData.phone.replace(/\D/g, ""))
+    )
+  }
+
   const handleSubmit = async () => {
-    if (validatePage(currentPage)) {
+    if (validatePage(currentPage) && isFormComplete()) {
       try {
         // Validate email format
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-          setErrors(prev => ({ ...prev, email: "Please enter a valid email address" }))
+          setErrors((prev) => ({ ...prev, email: "Please enter a valid email address" }))
           return
         }
 
         // Validate phone number format
-        if (!/^\d{10}$/.test(formData.phone.replace(/\D/g, ''))) {
-          setErrors(prev => ({ ...prev, phone: "Please enter a valid 10-digit phone number" }))
+        if (!/^\d{10}$/.test(formData.phone.replace(/\D/g, ""))) {
+          setErrors((prev) => ({ ...prev, phone: "Please enter a valid 10-digit phone number" }))
           return
         }
 
-        // Add loading state if needed
-        // setIsLoading(true)
-
         // Here you would typically send the data to your backend
-        const response = await fetch('/api/students', {
-          method: 'POST',
+        const response = await fetch("/api/students", {
+          method: "POST",
           headers: {
-            'Content-Type': 'application/json',
+            "Content-Type": "application/json",
           },
-          body: JSON.stringify(formData)
+          body: JSON.stringify(formData),
         })
 
         if (!response.ok) {
-          throw new Error('Failed to submit form')
+          throw new Error("Failed to submit form")
         }
 
-        // Show success message
+        // Only close dialog after successful submission
         alert("Form submitted successfully! We'll get back to you soon.")
-        
-        // Reset form
+
+        // Reset form and close dialog
         setFormData({
           firstName: "",
           lastName: "",
@@ -133,15 +151,13 @@ export default function StudentForm() {
           careerGoals: "",
           additionalInfo: "",
         })
-        
-        // Reset to first page
+
         setCurrentPage(1)
-        
+        onOpenChange(false) // Only close here after successful submission
       } catch (error) {
-        console.error('Form submission error:', error)
+        console.error("Form submission error:", error)
         alert("Something went wrong. Please try again.")
-      } finally {
-        // setIsLoading(false)
+        // Don't close dialog on error
       }
     }
   }
@@ -184,35 +200,143 @@ export default function StudentForm() {
         return ""
     }
   }
+  const validateUsername = async () => {
+    // Reset errors
+    setErrors({})
 
+    // Basic validation
+    if (!formData.username.trim()) {
+      setErrors({ username: "Username is required" })
+      return
+    }
+
+    if (formData.username.length < 3) {
+      setErrors({ username: "Username must be at least 3 characters" })
+      return
+    }
+
+    // Start loading state
+    setButtonState("loading")
+
+    // Simulate API call
+    await new Promise((resolve) => setTimeout(resolve, 2000))
+
+    // Simulate validation result (50% chance of being valid for demo)
+    const isValid = Math.random() > 0.5
+
+    if (isValid) {
+      setButtonState("valid")
+      // Reset to idle after 3 seconds
+      setTimeout(() => setButtonState("idle"), 3000)
+    } else {
+      setButtonState("invalid")
+      setErrors({ username: "Username is already taken or invalid" })
+      // Reset to idle after 2 seconds
+      setTimeout(() => setButtonState("idle"), 2000)
+    }
+  }
+    const getButtonContent = () => {
+    switch (buttonState) {
+      case "loading":
+        return <Loader2 className="h-4 w-4 animate-spin" />
+      case "valid":
+        return <Check className="h-5 w-5" />
+      case "invalid":
+        return <X className="h-4 w-4" />
+      default:
+        return "Check Valid"
+    }
+  }
+
+  const getButtonClasses = () => {
+    const baseClasses = "relative overflow-hidden transition-all duration-500 ease-out transform"
+
+    switch (buttonState) {
+      case "loading":
+        return `${baseClasses} bg-green-500 hover:bg-green-600 text-white scale-105 shadow-lg shadow-green-500/25`
+      case "valid":
+        return `${baseClasses} bg-green-500 hover:bg-green-600 text-white w-12 h-12 rounded-full p-0 min-w-0 scale-110 shadow-lg shadow-green-500/50 animate-pulse-success`
+      case "invalid":
+        return `${baseClasses} bg-red-500 hover:bg-red-600 text-white scale-105 shadow-lg shadow-red-500/25 animate-shake`
+      default:
+        return `${baseClasses} hover:scale-105 hover:shadow-md`
+    }
+  }
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-400 via-purple-500 to-violet-600 flex items-center justify-center p-4">
-      <Card className="w-full max-w-2xl shadow-2xl border-0 bg-white/95 backdrop-blur-sm">
-        <CardHeader className="text-center space-y-4">
-          <div className="flex items-center justify-center space-x-2 text-violet-600">
+    <Dialog open={open} onOpenChange={onOpenChange} modal={true}>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto [&>button]:hidden">
+        <DialogHeader className="text-center space-y-4">
+          <div className="flex items-center justify-center space-x-2 bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
             {getPageIcon(currentPage)}
-            <CardTitle className="text-2xl font-bold">Student Information Form</CardTitle>
+            <DialogTitle className="text-2xl font-bold">
+              Student Information Form
+            </DialogTitle>
           </div>
-          <CardDescription className="text-lg">
+          <DialogDescription className="text-lg">
             {getPageTitle(currentPage)} - {getPageDescription(currentPage)}
-          </CardDescription>
+          </DialogDescription>
 
-          {/* Progress Bar */}
           <div className="space-y-2">
             <Progress value={(currentPage / 3) * 100} className="h-2" />
             <p className="text-sm text-muted-foreground">Step {currentPage} of 3</p>
           </div>
-        </CardHeader>
+        </DialogHeader>
 
-        <CardContent className="space-y-6">
-          {/* Page 1: Personal Information */}
+        <div className="space-y-6 mt-6">
           {currentPage === 1 && (
             <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="firstName">First Name *</Label>
+                  <Label htmlFor="username" className="text-sm font-medium">
+                    Username*
+                  </Label>
+                  <div className="relative">
+                    <Input
+                      id="username"
+                      value={formData.username}
+                      onChange={(e) => updateFormData("username", e.target.value)}
+                      placeholder="Enter your Username"
+                      className={`transition-all duration-300 ${
+                        errors.username
+                          ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
+                          : buttonState === "valid"
+                          ? "border-green-500 focus:border-green-500 focus:ring-green-500/20"
+                          : "focus:ring-blue-500/20"
+                      }`}
+                    />
+                    {buttonState === "valid" && (
+                      <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                        <Check className="h-4 w-4 text-green-500" />
+                      </div>
+                    )}
+                  </div>
+                  {errors.username && (
+                    <p className="text-red-500 text-sm animate-in slide-in-from-left-2 duration-300">
+                      {errors.username}
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="invisible text-sm">Action</Label>
+                  <div className="flex items-start">
+                    <Button
+                      onClick={validateUsername}
+                      disabled={buttonState === "loading" || !formData.username.trim()}
+                      className={getButtonClasses()}
+                    >
+                      <span className={buttonState === "loading" ? "ripple-effect" : ""}>
+                        {getButtonContent()}
+                      </span>
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                  <Label htmlFor="fullname">Full Name *</Label>
                   <Input
-                    id="firstName"
+                    id="fullname"
                     value={formData.firstName}
                     onChange={(e) => updateFormData("firstName", e.target.value)}
                     placeholder="Enter your first name"
@@ -220,20 +344,7 @@ export default function StudentForm() {
                   />
                   {errors.firstName && <p className="text-red-500 text-sm">{errors.firstName}</p>}
                 </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="lastName">Last Name *</Label>
-                  <Input
-                    id="lastName"
-                    value={formData.lastName}
-                    onChange={(e) => updateFormData("lastName", e.target.value)}
-                    placeholder="Enter your last name"
-                    className={errors.lastName ? "border-red-500" : ""}
-                  />
-                  {errors.lastName && <p className="text-red-500 text-sm">{errors.lastName}</p>}
-                </div>
-              </div>
-
+               
               <div className="space-y-2">
                 <Label htmlFor="age">Age *</Label>
                 <Input
@@ -366,7 +477,7 @@ export default function StudentForm() {
                   value={formData.previousEducation}
                   onChange={(e) => updateFormData("previousEducation", e.target.value)}
                   placeholder="Tell us about your previous educational experiences, certifications, or relevant coursework"
-                  className="min-h-[100px]"
+                  className="min-h-[80px]"
                 />
               </div>
 
@@ -377,7 +488,7 @@ export default function StudentForm() {
                   value={formData.careerGoals}
                   onChange={(e) => updateFormData("careerGoals", e.target.value)}
                   placeholder="Share your career goals, aspirations, or what you hope to achieve in your field"
-                  className="min-h-[100px]"
+                  className="min-h-[80px]"
                 />
               </div>
 
@@ -388,7 +499,7 @@ export default function StudentForm() {
                   value={formData.additionalInfo}
                   onChange={(e) => updateFormData("additionalInfo", e.target.value)}
                   placeholder="Any other information you'd like to share (hobbies, interests, achievements, etc.)"
-                  className="min-h-[100px]"
+                  className="min-h-[80px]"
                 />
               </div>
 
@@ -449,8 +560,8 @@ export default function StudentForm() {
               </Button>
             )}
           </div>
-        </CardContent>
-      </Card>
-    </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }
