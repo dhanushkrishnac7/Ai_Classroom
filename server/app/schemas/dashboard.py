@@ -16,3 +16,4 @@ class UserProfile(BaseModel):
     user_name: str = Field(..., alias="userName",description="Username of the user")
     full_name: str = Field(..., alias="fullName", description="Full name of the user")
     age: int = Field(..., description="Age of the user")
+    phone:  str = Field(..., description="Phone number of the user")
