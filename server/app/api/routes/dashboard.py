@@ -39,8 +39,7 @@ async def get_dashboard(token=Depends(verify_token)):
                 ownerName=cls["classrooms"]["profiles"]["user_name"]
             ) 
             for cls in enrolled_as_students_response.data
-        ]
-
+        ] 
         return DashboardResponse(
             message="success",
             ownedClassrooms=owned_classrooms,
@@ -60,14 +59,14 @@ async def get_dashboard(token=Depends(verify_token)):
 @router.post("/dashboard")
 async def create_user_profile(user_profile: UserProfile, token=Depends(verify_token)):
     user_id = token["sub"]
-
+    
     user_query = supabase.table("profiles").select("user_name").eq("id", user_id).limit(1).execute()
     if user_query.data:
         raise HTTPException(status_code=440, detail="User_already_exists")
     
     profile_data = user_profile.dict(by_alias=False)
     profile_data["id"] = user_id
-    
+    print("rec",profile_data)
     try:
         response = supabase.table("profiles").insert(profile_data).execute()
         
@@ -80,6 +79,7 @@ async def create_user_profile(user_profile: UserProfile, token=Depends(verify_to
         return {"message": "User profile created successfully", "status": "success"}
         
     except Exception as e:
+         
         raise HTTPException(
             status_code=500,
             detail=f"Failed to create user profile: {str(e)}"
