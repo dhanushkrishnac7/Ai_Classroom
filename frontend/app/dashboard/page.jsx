@@ -1,6 +1,7 @@
 "use client"
 import Classes from "./compontents/Classes/classes"
 import { useEffect, useState } from "react"
+  import { jwtDecode } from "jwt-decode"
 import StudentForm from "./student/studentForm"
 import {
   Brain,
@@ -16,7 +17,6 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { SidebarInset,SidebarProvider} from "@/components/ui/sidebar"
-
 const assignments = [
   {
     title: "Physics Lab Report",
@@ -79,33 +79,58 @@ const studyPlan = [
 ]
 
 export default function HomePage() {
-const [showstudentform , setshowstudentform] = useState(false);
-useEffect(()=>{
-  const fetchdata = async ()=>{
-    console.log("get token.....")
-    const token = document.cookie
-      .split('; ')
-      .find(row => row.startsWith('token='))
-      ?.split('=')[1]
-    console.log(token ,"now fetching")
-    const res = await fetch("http://localhost:8000/dashboard",{
-      method:'GET',
-      headers:{
-        'Authorization':`Bearer ${token}`,
-        'Content-Type': 'application/json',
+  const [showstudentform, setshowstudentform] = useState(false);
+  const [email, setEmail] = useState("");
+  const [dashboardResponse, setDashboardResponse] = useState(null); 
+  useEffect(() => {
+    const fetchdata = async () => {
+      const token = document.cookie
+        .split('; ')
+        .find(row => row.startsWith('token='))
+        ?.split('=')[1];
+
+      if (token) {
+        try {
+          const payload = jwtDecode(token);
+          if (payload.email) setEmail(payload.email);
+        } catch (e) {
+          console.error("Invalid token", e);
+        }
       }
-    })
-    console.log("got it")
-    if(res.status === 440){
-      setshowstudentform(true);
-    }
     
-  } 
-fetchdata()},[])
+      const res = await fetch("http://localhost:8000/dashboard", {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        }
+      });
+      if (res.status === 440) {
+        setshowstudentform(true);
+      }
+     
+      try {
+        const data = await res.json();
+        setDashboardResponse(data);
+        console.log("Response -->", data);
+      } catch (e) {
+        setDashboardResponse({ error: "Failed to parse response" });
+      }
+    };
+    fetchdata();
+  }, []);
+
   return (
     <>
-    <StudentForm open={showstudentform} onOpenChange={setshowstudentform} />
-    <SidebarProvider>
+      <StudentForm open={showstudentform} onOpenChange={setshowstudentform} email={email} />
+      
+      {dashboardResponse && (
+        <div className="p-4 m-4 bg-gray-100 border rounded text-sm text-gray-700">
+          <strong>Dashboard Response:</strong>
+          <pre className="whitespace-pre-wrap">{JSON.stringify(dashboardResponse, null, 2)}</pre>
+        </div>
+      )}
+      <SidebarProvider>
       
       <SidebarInset>
         
@@ -120,7 +145,7 @@ fetchdata()},[])
         <div className="flex-1 p-6 space-y-8 bg-slate-50/30">
   
           <Classes/>
-          {/* Assignments Section */}
+          
           <section>
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-semibold text-slate-900">Upcoming Assignments</h2>
@@ -172,7 +197,7 @@ fetchdata()},[])
             </div>
           </section>
 
-          {/* Study Plan Section */}
+        
           <section>
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-semibold text-slate-900">Today's Study Plan</h2>
@@ -236,7 +261,6 @@ fetchdata()},[])
         </div>
       </SidebarInset>
     </SidebarProvider>
-    
     </>
   )
 }
