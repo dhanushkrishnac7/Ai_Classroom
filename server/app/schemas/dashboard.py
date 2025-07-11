@@ -14,6 +14,9 @@ class EnrolledClassroom(BaseModel):
 
 class DashboardResponse(BaseModel):
     message: str = Field(..., description="Response message")
+    user_name: str = Field(..., alias="userName", description="Username of the user")
+    full_name: str = Field(..., alias="fullName", description="Full name of the user")
+    email: Optional[str] = Field(None, description="Email of the user")
     owned_classrooms: List[OwnedClassroom] = Field(default_factory=list, alias="ownedClassrooms", description="Classrooms created by the user")
     enrolled_as_admins: List[EnrolledClassroom] = Field(default_factory=list, alias="enrolledClassroomsAsAdmins", description="Classrooms the user is enrolled as admin")
     enrolled_as_students: List[EnrolledClassroom] = Field(default_factory=list, alias="enrolledClassroomsAsStudents", description="Classrooms the user is enrolled as student")
