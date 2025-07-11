@@ -1,121 +1,154 @@
 "use client"
 
 import {
-  GraduationCap,
   ChevronDown,
+  ChevronRight,
   Settings,
   User,
+  BookOpen,
+  Crown,
+  GraduationCap,
 } from "lucide-react"
-import navigationData from "./menu"
-import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-
-
-
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible"
 import {
   Sidebar,
   SidebarContent,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarHeader,
-  SidebarInput,
-  SidebarInset,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
   SidebarFooter,
 } from "@/components/ui/sidebar"
+import { useContext } from "react"
+import { fetchdata } from "../../layout"
+
 function AppSidebar() {
+  const { dashboardResponse ,user} = useContext(fetchdata)
+console.log("user",user)
+  
+
   return (
-      <Sidebar collapsible="icon">
+    <Sidebar collapsible="icon" className="text-base">
+
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton
               size="lg"
-              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground text-lg hover:bg-purple-100 hover:text-purple-700 transition-colors"
             >
-              <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-blue-600 text-white">
-                <GraduationCap className="size-4" />
+              <div className="flex aspect-square size-10 items-center justify-center rounded-lg">
+                <BookOpen className="size-6" />
               </div>
-              <div className="grid flex-1 text-left text-sm leading-tight">
+              <div className="grid flex-1 text-left text-lg leading-tight">
                 <span className="truncate font-semibold">AI Classroom</span>
-                <span className="truncate text-xs">Student Portal</span>
               </div>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
 
+     
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Learning Hub</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {navigationData.navMain.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild isActive={item.isActive}>
-                    <a href={item.url}>
-                      <item.icon />
-                      <span>{item.title}</span>
-                      {item.badge && (
-                        <Badge variant="destructive" className="ml-auto text-xs">
-                          {item.badge}
-                        </Badge>
-                      )}
-                    </a>
-                  </SidebarMenuButton>
-                  {item.items && (
-                    <SidebarMenu className="ml-4 border-l border-sidebar-border pl-4">
-                      {item.items.map((subItem) => (
-                        <SidebarMenuItem key={subItem.title}>
-                          <SidebarMenuButton asChild size="sm">
-                            <a href={subItem.url}>
-                              {subItem.color && <div className={`w-2 h-2 rounded-full ${subItem.color}`}></div>}
-                              <span>{subItem.title}</span>
-                              {subItem.badge && (
-                                <Badge variant="secondary" className="ml-auto text-xs">
-                                  {subItem.badge}
-                                </Badge>
-                              )}
-                            </a>
-                          </SidebarMenuButton>
-                        </SidebarMenuItem>
-                      ))}
-                    </SidebarMenu>
-                  )}
+              
+              <Collapsible className="group/collapsible">
+                <SidebarMenuItem>
+                  <CollapsibleTrigger asChild>
+                    <SidebarMenuButton className="flex justify-between items-center hover:bg-purple-100 hover:text-purple-700">
+                      <div className="flex gap-2 items-center">
+                        <User className="h-4 w-4" />
+                        <span>Teaching</span>
+                      </div>
+                      <ChevronRight className="h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-90" />
+                    </SidebarMenuButton>
+                  </CollapsibleTrigger>
+
+                  <CollapsibleContent className="ml-6 mt-1 space-y-1">
+                    {dashboardResponse?.ownedClassrooms?.map((cls) => (
+                      <SidebarMenuButton
+                        key={cls}
+                        className="text-sm hover:bg-purple-100 hover:text-purple-700"
+                      >
+                        {cls}
+                      </SidebarMenuButton>
+                    ))}
+                  </CollapsibleContent>
                 </SidebarMenuItem>
-              ))}
+              </Collapsible>
+
+              
+              <Collapsible className="group/collapsible">
+                <SidebarMenuItem>
+                  <CollapsibleTrigger asChild>
+                    <SidebarMenuButton className="flex justify-between items-center hover:bg-purple-100 hover:text-purple-700">
+                      <div className="flex gap-2 items-center">
+                        <Crown className="h-4 w-4" />
+                        <span>Admin</span>
+                      </div>
+                      <ChevronRight className="h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-90" />
+                    </SidebarMenuButton>
+                  </CollapsibleTrigger>
+
+                  <CollapsibleContent className="ml-6 mt-1 space-y-1">
+                    {dashboardResponse?.enrolledClassroomsAsAdmins?.map((cls) => (
+                      <SidebarMenuButton
+                        key={cls.classroomName}
+                        className="text-sm hover:bg-purple-100 hover:text-purple-700"
+                      >
+                        {cls.classroomName}{" "}
+                        <span className="text-xs text-muted-foreground">(by {cls.ownerName})</span>
+                      </SidebarMenuButton>
+                    ))}
+                  </CollapsibleContent>
+                </SidebarMenuItem>
+              </Collapsible>
+
+              
+              <Collapsible className="group/collapsible">
+                <SidebarMenuItem>
+                  <CollapsibleTrigger asChild>
+                    <SidebarMenuButton className="flex justify-between items-center hover:bg-purple-100 hover:text-purple-700">
+                      <div className="flex gap-2 items-center">
+                        <GraduationCap className="h-4 w-4" />
+                        <span>My Classes</span>
+                      </div>
+                      <ChevronRight className="h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-90" />
+                    </SidebarMenuButton>
+                  </CollapsibleTrigger>
+
+                  <CollapsibleContent className="ml-6 mt-1 space-y-1">
+                    {dashboardResponse?.enrolledClassroomsAsStudents?.map((cls) => (
+                      <SidebarMenuButton
+                        key={cls.classroomName}
+                        className="text-sm hover:bg-purple-100 hover:text-purple-700"
+                      >
+                        {cls.classroomName}{" "}
+                        <span className="text-xs text-muted-foreground">(by {cls.ownerName})</span>
+                      </SidebarMenuButton>
+                    ))}
+                  </CollapsibleContent>
+                </SidebarMenuItem>
+              </Collapsible>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-
-        <SidebarGroup>
-          <SidebarGroupLabel>Tools & Features</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {navigationData.navSecondary.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild>
-                    <a href={item.url}>
-                      <item.icon />
-                      <span>{item.title}</span>
-                      {item.badge && (
-                        <Badge variant="destructive" className="ml-auto text-xs">
-                          {item.badge}
-                        </Badge>
-                      )}
-                    </a>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
       </SidebarContent>
 
       <SidebarFooter>
@@ -125,34 +158,36 @@ function AppSidebar() {
               <DropdownMenuTrigger asChild>
                 <SidebarMenuButton
                   size="lg"
-                  className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                  className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground text-lg"
                 >
-                  <Avatar className="h-8 w-8 rounded-lg">
+                  <Avatar className="h-10 w-10 rounded-lg">
                     <AvatarImage
-                      src={navigationData.user.avatar || "/placeholder.svg"}
-                      alt={navigationData.user.name}
+                      src= {user?.user_metadata?.avatar_url}
+                      alt={user?.user_metadata?.avatar_url}
                     />
-                    <AvatarFallback className="rounded-lg bg-blue-100 text-blue-600">AC</AvatarFallback>
+                    <AvatarFallback className="rounded-lg bg-blue-100 text-blue-600">
+                      AC
+                    </AvatarFallback>
                   </Avatar>
-                  <div className="grid flex-1 text-left text-sm leading-tight">
-                    <span className="truncate font-semibold">{navigationData.user.name}</span>
-                    <span className="truncate text-xs">{navigationData.user.grade}</span>
+                  <div className="grid flex-1 text-left text-lg leading-tight">
+                    <span className="truncate font-semibold">{user?.user_metadata?.user_name|| user?.user_metadata?.name}</span>
+                    
                   </div>
-                  <ChevronDown className="ml-auto size-4" />
+                  <ChevronDown className="ml-auto size-5" />
                 </SidebarMenuButton>
               </DropdownMenuTrigger>
               <DropdownMenuContent
-                className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg"
+                className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg text-base"
                 side="bottom"
                 align="end"
                 sideOffset={4}
               >
                 <DropdownMenuItem>
-                  <User className="mr-2 h-4 w-4" />
+                  <User className="mr-2 h-5 w-5" />
                   Profile
                 </DropdownMenuItem>
                 <DropdownMenuItem>
-                  <Settings className="mr-2 h-4 w-4" />
+                  <Settings className="mr-2 h-5 w-5" />
                   Settings
                 </DropdownMenuItem>
                 <DropdownMenuItem>Sign out</DropdownMenuItem>
@@ -161,10 +196,10 @@ function AppSidebar() {
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
+
       <SidebarRail />
     </Sidebar>
   )
-  
 }
 
 export default AppSidebar
