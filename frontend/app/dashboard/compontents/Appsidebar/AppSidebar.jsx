@@ -170,7 +170,7 @@ console.log("user",user)
                     </AvatarFallback>
                   </Avatar>
                   <div className="grid flex-1 text-left text-lg leading-tight">
-                    <span className="truncate font-semibold">{user?.user_metadata?.user_name}</span>
+                    <span className="truncate font-semibold">{user?.user_metadata?.user_name|| user?.user_metadata?.name}</span>
                     
                   </div>
                   <ChevronDown className="ml-auto size-5" />
