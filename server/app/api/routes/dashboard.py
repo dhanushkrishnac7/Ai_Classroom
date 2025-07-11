@@ -1,7 +1,7 @@
 from fastapi import FastAPI, APIRouter, Depends, HTTPException, status
 from app.services.auth_middle import verify_token
 from app.core.supabase_client import supabase
-from app.schemas.dashboard import DashboardResponse, EnrolledClassroom
+from app.schemas.dashboard import DashboardResponse, EnrolledClassroom, OwnedClassroom
 from app.schemas.dashboard import UserProfile
 
 router = APIRouter()
@@ -16,26 +16,37 @@ async def get_dashboard(token=Depends(verify_token)):
 
 
     try:
-        owned_classrooms_response = supabase.table("classrooms").select("classname").eq("owner_id", user_id).execute()
+        owned_classrooms_response = supabase.table("classrooms").select("id, classname").eq("owner_id", user_id).execute()
 
-        owned_classrooms = [cls["classname"] for cls in owned_classrooms_response.data]
+        owned_classrooms = [
+            OwnedClassroom(id=cls["id"], classname=cls["classname"])
+            for cls in owned_classrooms_response.data
+        ]
 
-        enrolled_as_admins_response = supabase.table("admins_of_classrooms").select("classrooms(classname, profiles!classes_owner_fkey(user_name))").eq("profile_id", user_id).execute()
+        enrolled_as_admins_response = supabase.table("admins_of_classrooms").select(
+            "classrooms(id, classname, owner_id, profiles!classes_owner_fkey(id, user_name))"
+        ).eq("profile_id", user_id).execute()
         
         enrolled_as_admins = [ 
             EnrolledClassroom(
+                classroomId=cls["classrooms"]["id"],
                 classroomName=cls["classrooms"]["classname"],
+                ownerId=cls["classrooms"]["profiles"]["id"],
                 ownerName=cls["classrooms"]["profiles"]["user_name"]
             ) 
             for cls in enrolled_as_admins_response.data
         ]
 
 
-        enrolled_as_students_response = supabase.table("students_of_classrooms").select("classrooms(classname, profiles!classes_owner_fkey(user_name))").eq("profile_id", user_id).execute()
+        enrolled_as_students_response = supabase.table("students_of_classrooms").select(
+            "classrooms(id, classname, owner_id, profiles!classes_owner_fkey(id, user_name))"
+        ).eq("profile_id", user_id).execute()
 
         enrolled_as_students = [
             EnrolledClassroom(
+                classroomId=cls["classrooms"]["id"],
                 classroomName=cls["classrooms"]["classname"],
+                ownerId=cls["classrooms"]["profiles"]["id"],
                 ownerName=cls["classrooms"]["profiles"]["user_name"]
             ) 
             for cls in enrolled_as_students_response.data
