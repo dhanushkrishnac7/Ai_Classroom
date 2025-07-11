@@ -11,34 +11,18 @@ export default function CallbackPage() {
   const threeHoursLater = new Date(Date.now() + 3 * 60 * 60 * 1000);
 
   useEffect(() => {
-    // Listen for auth state changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.access_token) {
-        // Update cookie when token changes
-        document.cookie = `token=${session.access_token}; expires=${threeHoursLater.toUTCString()}; path=/; secure; samesite=strict`
-        console.log("Token updated in cookies")
-      } else {
-        // Clear token when logged out
-        document.cookie = 'token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT'
-        console.log("Token cleared from cookies")
-      }
-    })
-
     const setSession = async () => {
       const { data: { session }, error } = await supabase.auth.getSession()
-      
+
       if (error) {
         console.error("Session fetch error:", error.message)
         return router.push("/")
       }
 
-      console.log("Current session:", session)
       if (session) {
-        // Initial token setup
+        const threeHoursLater = new Date(Date.now() + 3 * 60 * 60 * 1000)
         document.cookie = `token=${session.access_token}; expires=${threeHoursLater.toUTCString()}; path=/; secure; samesite=strict`
-        console.log("Redirecting to dashboard")
+        console.log("Initial session set. Redirecting to dashboard")
         router.push("/dashboard")
       } else {
         router.push("/")
@@ -47,9 +31,25 @@ export default function CallbackPage() {
 
     setSession()
 
-    // Cleanup subscription on unmount
+    // Subscribe to auth state changes (includes token refreshes)
+    const { data: subscription } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "TOKEN_REFRESHED" || event === "SIGNED_IN") {
+        if (session?.access_token) {
+          const threeHoursLater = new Date(Date.now() + 3 * 60 * 60 * 1000)
+          document.cookie = `token=${session.access_token}; expires=${threeHoursLater.toUTCString()}; path=/; secure; samesite=strict`
+          console.log("Access token refreshed and updated in cookies.")
+        }
+      }
+
+      if (event === "SIGNED_OUT") {
+        document.cookie = `token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`
+        router.push("/")
+      }
+    })
+
+    // Cleanup on component unmount
     return () => {
-      subscription.unsubscribe()
+      subscription.subscription.unsubscribe()
     }
   }, [router])
 
@@ -131,3 +131,4 @@ export default function CallbackPage() {
     </div>
   )
 }
+
