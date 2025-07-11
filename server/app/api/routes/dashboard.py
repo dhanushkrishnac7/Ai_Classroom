@@ -10,7 +10,8 @@ router = APIRouter()
 @router.get("/dashboard",response_model=DashboardResponse)
 async def get_dashboard(token=Depends(verify_token)):
     user_id = token["sub"]
-    user_query = supabase.table("profiles").select("user_name").eq("id", user_id).limit(1).execute()
+
+    user_query = supabase.table("profiles").select("user_name, full_name, email").eq("id", user_id).limit(1).execute()
     if not user_query.data:
         raise HTTPException(status_code=440, detail="User_not_found")
 
@@ -54,6 +55,9 @@ async def get_dashboard(token=Depends(verify_token)):
 
         return DashboardResponse(
             message="success",
+            userName = user_query.data[0]['user_name'],
+            fullName = user_query.data[0]['full_name'],    
+            email = user_query.data[0]['email'],
             ownedClassrooms=owned_classrooms,
             enrolledClassroomsAsAdmins=enrolled_as_admins,
             enrolledClassroomsAsStudents=enrolled_as_students
@@ -78,6 +82,7 @@ async def create_user_profile(user_profile: UserProfile, token=Depends(verify_to
     
     profile_data = user_profile.dict(by_alias=False)
     profile_data["id"] = user_id
+    profile_data["email"] = token["email"]
     
     try:
         response = supabase.table("profiles").insert(profile_data).execute()
