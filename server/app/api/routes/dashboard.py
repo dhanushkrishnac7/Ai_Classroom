@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from app.services.auth_middle import verify_token
 from app.core.supabase_client import supabase
 from app.schemas.dashboard import DashboardResponse, EnrolledClassroom, OwnedClassroom
@@ -20,7 +20,7 @@ async def get_dashboard(token=Depends(verify_token)):
         owned_classrooms_response = supabase.table("classrooms").select("id, classname").eq("owner_id", user_id).execute()
 
         owned_classrooms = [
-            OwnedClassroom(id=cls["id"], classname=cls["classname"])
+            OwnedClassroom(id=cls["id"], classname=cls["classname"], role="owner")
             for cls in owned_classrooms_response.data
         ]
 
@@ -33,7 +33,8 @@ async def get_dashboard(token=Depends(verify_token)):
                 classroomId=cls["classrooms"]["id"],
                 classroomName=cls["classrooms"]["classname"],
                 ownerId=cls["classrooms"]["profiles"]["id"],
-                ownerName=cls["classrooms"]["profiles"]["user_name"]
+                ownerName=cls["classrooms"]["profiles"]["user_name"],
+                role = "admin"
             ) 
             for cls in enrolled_as_admins_response.data
         ]
@@ -48,7 +49,8 @@ async def get_dashboard(token=Depends(verify_token)):
                 classroomId=cls["classrooms"]["id"],
                 classroomName=cls["classrooms"]["classname"],
                 ownerId=cls["classrooms"]["profiles"]["id"],
-                ownerName=cls["classrooms"]["profiles"]["user_name"]
+                ownerName=cls["classrooms"]["profiles"]["user_name"],
+                role = "student"
             ) 
             for cls in enrolled_as_students_response.data
         ]
