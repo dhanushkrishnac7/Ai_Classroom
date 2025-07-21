@@ -70,23 +70,23 @@ console.log("user",user)
               
               <Collapsible className="group/collapsible">
                 <SidebarMenuItem>
-                  <CollapsibleTrigger asChild>
+                  <CollapsibleTrigger asChild className="h-13">
                     <SidebarMenuButton className="flex justify-between items-center hover:bg-purple-100 hover:text-purple-700">
                       <div className="flex gap-2 items-center">
-                        <User className="h-4 w-4" />
-                        <span>Teaching</span>
+                        <User className="size-5" />
+                        <span className="text-lg p-4">Teaching</span>
                       </div>
                       <ChevronRight className="h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-90" />
                     </SidebarMenuButton>
                   </CollapsibleTrigger>
 
-                  <CollapsibleContent className="ml-6 mt-1 space-y-1">
+                  <CollapsibleContent className="p-3 ml-6 mt-1 space-y-1">
                     {dashboardResponse?.ownedClassrooms?.map((cls) => (
                       <SidebarMenuButton
-                        key={cls}
+                        key={cls.classname}
                         className="text-sm hover:bg-purple-100 hover:text-purple-700"
                       >
-                        {cls}
+                        {cls.classname}
                       </SidebarMenuButton>
                     ))}
                   </CollapsibleContent>
@@ -96,17 +96,17 @@ console.log("user",user)
               
               <Collapsible className="group/collapsible">
                 <SidebarMenuItem>
-                  <CollapsibleTrigger asChild>
+                  <CollapsibleTrigger asChild className="h-13">
                     <SidebarMenuButton className="flex justify-between items-center hover:bg-purple-100 hover:text-purple-700">
                       <div className="flex gap-2 items-center">
-                        <Crown className="h-4 w-4" />
-                        <span>Admin</span>
+                        <Crown className="size-5" />
+                        <span className="text-lg p-4">Admin</span>
                       </div>
                       <ChevronRight className="h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-90" />
                     </SidebarMenuButton>
                   </CollapsibleTrigger>
 
-                  <CollapsibleContent className="ml-6 mt-1 space-y-1">
+                  <CollapsibleContent className="p-3 ml-6 mt-1 space-y-1">
                     {dashboardResponse?.enrolledClassroomsAsAdmins?.map((cls) => (
                       <SidebarMenuButton
                         key={cls.classroomName}
@@ -123,17 +123,17 @@ console.log("user",user)
               
               <Collapsible className="group/collapsible">
                 <SidebarMenuItem>
-                  <CollapsibleTrigger asChild>
+                  <CollapsibleTrigger asChild className="h-13">
                     <SidebarMenuButton className="flex justify-between items-center hover:bg-purple-100 hover:text-purple-700">
                       <div className="flex gap-2 items-center">
-                        <GraduationCap className="h-4 w-4" />
-                        <span>My Classes</span>
+                        <GraduationCap className="size-5" />
+                        <span className="text-lg p-4">Learning</span>
                       </div>
                       <ChevronRight className="h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-90" />
                     </SidebarMenuButton>
                   </CollapsibleTrigger>
 
-                  <CollapsibleContent className="ml-6 mt-1 space-y-1">
+                  <CollapsibleContent className="p-3 ml-6  mt-1 space-y-1">
                     {dashboardResponse?.enrolledClassroomsAsStudents?.map((cls) => (
                       <SidebarMenuButton
                         key={cls.classroomName}
@@ -170,7 +170,7 @@ console.log("user",user)
                     </AvatarFallback>
                   </Avatar>
                   <div className="grid flex-1 text-left text-lg leading-tight">
-                    <span className="truncate font-semibold">{user?.user_metadata?.user_name|| user?.user_metadata?.name}</span>
+                    <span className="truncate font-semibold">{dashboardResponse?.userName}</span>
                     
                   </div>
                   <ChevronDown className="ml-auto size-5" />
