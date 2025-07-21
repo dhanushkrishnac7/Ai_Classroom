@@ -4,12 +4,14 @@ from typing import Optional, List
 class OwnedClassroom(BaseModel):
     id: int
     classname: str
+    role: str
 
 class EnrolledClassroom(BaseModel):
     classroomId: int
     classroomName: str
     ownerId: str
     ownerName: str
+    role: str
 
 
 class DashboardResponse(BaseModel):
