@@ -20,8 +20,6 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-200 via-white to-indigo-50">
-      
-      {/* Header */}
       <header className="w-full px-6 py-6">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center space-x-2">
@@ -64,7 +62,7 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Hero Section */}
+     
       <main className="flex flex-col items-center justify-center px-6 py-20">
         <div className="max-w-4xl mx-auto text-center">
           <h1 className="text-5xl md:text-6xl font-bold text-foreground mb-6 leading-tight">
@@ -111,10 +109,9 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Feature Cards */}
           <div className="grid md:grid-cols-3 gap-8 max-w-3xl mx-auto">
 
-            {/* Secure Card with gradient glow on hover */}
+            
             <div className="relative group">
               <div
                 className="absolute -inset-1.5 rounded-xl opacity-0 blur-sm group-hover:opacity-90 z-0 transition-opacity duration-300"
@@ -135,7 +132,7 @@ export default function Home() {
               </Card>
             </div>
 
-            {/* Fast Card */}
+           
           <div className="relative group">
               <div
                 className="absolute -inset-1.5 rounded-xl opacity-0 blur-sm group-hover:opacity-90 z-0 transition-opacity duration-300"
@@ -157,7 +154,6 @@ export default function Home() {
             </div>
 
 
-            {/* Global Card */}
            <div className="relative group">
               <div
                 className="absolute -inset-1.5 rounded-xl opacity-0 blur-sm group-hover:opacity-90 z-0 transition-opacity duration-300"
@@ -182,7 +178,7 @@ export default function Home() {
         </div>
       </main>
 
-      {/* Footer */}
+   
       <footer className="w-full px-6 py-8 mt-20">
         <div className="max-w-7xl mx-auto text-center text-muted-foreground">
           <p>&copy; 2025 AuthFlow. All rights reserved.</p>
