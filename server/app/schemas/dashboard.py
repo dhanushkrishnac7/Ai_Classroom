@@ -1,30 +1,42 @@
+
 from pydantic import BaseModel, Field
 from typing import Optional, List
 
 class OwnedClassroom(BaseModel):
-    id: int
-    classname: str
-    role: str
+    id: int = Field(..., alias="id")
+    classname: str = Field(..., alias="classname")
+    role: str = Field(..., alias="role")
+
+    class Config:
+        populate_by_name = True
 
 class EnrolledClassroom(BaseModel):
-    classroomId: int
-    classroomName: str
-    ownerId: str
-    ownerName: str
-    role: str
+    classroom_id: int = Field(..., alias="classroomId")
+    classroom_name: str = Field(..., alias="classroomName")
+    owner_id: str = Field(..., alias="ownerId")
+    owner_name: str = Field(..., alias="ownerName")
+    role: str = Field(..., alias="role")
 
+    class Config:
+        populate_by_name = True
 
 class DashboardResponse(BaseModel):
-    message: str = Field(..., description="Response message")
-    user_name: str = Field(..., alias="userName", description="Username of the user")
-    full_name: str = Field(..., alias="fullName", description="Full name of the user")
-    email: Optional[str] = Field(None, description="Email of the user")
-    owned_classrooms: List[OwnedClassroom] = Field(default_factory=list, alias="ownedClassrooms", description="Classrooms created by the user")
-    enrolled_as_admins: List[EnrolledClassroom] = Field(default_factory=list, alias="enrolledClassroomsAsAdmins", description="Classrooms the user is enrolled as admin")
-    enrolled_as_students: List[EnrolledClassroom] = Field(default_factory=list, alias="enrolledClassroomsAsStudents", description="Classrooms the user is enrolled as student")
+    message: str = Field(..., alias="message")
+    user_name: str = Field(..., alias="userName")
+    full_name: str = Field(..., alias="fullName")
+    email: Optional[str] = Field(None, alias="email")
+    owned_classrooms: List[OwnedClassroom] = Field(default_factory=list, alias="ownedClassrooms")
+    enrolled_as_admins: List[EnrolledClassroom] = Field(default_factory=list, alias="enrolledAsAdmins")
+    enrolled_as_students: List[EnrolledClassroom] = Field(default_factory=list, alias="enrolledAsStudents")
+
+    class Config:
+        populate_by_name = True
 
 class UserProfile(BaseModel):
-    user_name: str = Field(..., alias="userName",description="Username of the user")
-    full_name: str = Field(..., alias="fullName", description="Full name of the user")
-    age: int = Field(..., description="Age of the user")
-    phone:  str = Field(..., description="Phone number of the user")
+    user_name: str = Field(..., alias="userName")
+    full_name: str = Field(..., alias="fullName")
+    age: int = Field(..., alias="age")
+    phone: str = Field(..., alias="phone")
+
+    class Config:
+        populate_by_name = True

@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.routes import dashboard
+from app.api.routes import dashboard, classroom
 from app.api.routes.exception_handler import http_exception_handler
 from fastapi.middleware.cors import CORSMiddleware
 app = FastAPI()
@@ -16,4 +16,5 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(dashboard.router, prefix="", tags=["Users"])
+app.include_router(classroom.router, prefix="", tags=["Classroom"])
 app.add_exception_handler(HTTPException, http_exception_handler)

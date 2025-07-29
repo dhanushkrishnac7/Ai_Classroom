@@ -1,3 +1,4 @@
+
 from fastapi import APIRouter, Depends, HTTPException
 from app.services.auth_middle import verify_token
 from app.core.supabase_client import supabase
@@ -6,15 +7,13 @@ from app.schemas.dashboard import UserProfile
 
 router = APIRouter()
 
-
-@router.get("/dashboard",response_model=DashboardResponse)
+@router.get("/dashboard", response_model=DashboardResponse)
 async def get_dashboard(token=Depends(verify_token)):
     user_id = token["sub"]
 
     user_query = supabase.table("profiles").select("user_name, full_name, email").eq("id", user_id).limit(1).execute()
     if not user_query.data:
-        raise HTTPException(status_code=440, detail="User_not_found")
-
+        raise HTTPException(status_code=404, detail="User not found")
 
     try:
         owned_classrooms_response = supabase.table("classrooms").select("id, classname").eq("owner_id", user_id).execute()
@@ -30,15 +29,14 @@ async def get_dashboard(token=Depends(verify_token)):
         
         enrolled_as_admins = [ 
             EnrolledClassroom(
-                classroomId=cls["classrooms"]["id"],
-                classroomName=cls["classrooms"]["classname"],
-                ownerId=cls["classrooms"]["profiles"]["id"],
-                ownerName=cls["classrooms"]["profiles"]["user_name"],
-                role = "admin"
+                classroom_id=cls["classrooms"]["id"],
+                classroom_name=cls["classrooms"]["classname"],
+                owner_id=cls["classrooms"]["profiles"]["id"],
+                owner_name=cls["classrooms"]["profiles"]["user_name"],
+                role="admin"
             ) 
             for cls in enrolled_as_admins_response.data
         ]
-
 
         enrolled_as_students_response = supabase.table("students_of_classrooms").select(
             "classrooms(id, classname, owner_id, profiles!classes_owner_fkey(id, user_name))"
@@ -46,32 +44,27 @@ async def get_dashboard(token=Depends(verify_token)):
 
         enrolled_as_students = [
             EnrolledClassroom(
-                classroomId=cls["classrooms"]["id"],
-                classroomName=cls["classrooms"]["classname"],
-                ownerId=cls["classrooms"]["profiles"]["id"],
-                ownerName=cls["classrooms"]["profiles"]["user_name"],
-                role = "student"
+                classroom_id=cls["classrooms"]["id"],
+                classroom_name=cls["classrooms"]["classname"],
+                owner_id=cls["classrooms"]["profiles"]["id"],
+                owner_name=cls["classrooms"]["profiles"]["user_name"],
+                role="student"
             ) 
             for cls in enrolled_as_students_response.data
-        ] 
+        ]
+        
         return DashboardResponse(
             message="success",
-            userName = user_query.data[0]['user_name'],
-            fullName = user_query.data[0]['full_name'],    
-            email = user_query.data[0]['email'],
-            ownedClassrooms=owned_classrooms,
-            enrolledClassroomsAsAdmins=enrolled_as_admins,
-            enrolledClassroomsAsStudents=enrolled_as_students
+            user_name=user_query.data[0]['user_name'],
+            full_name=user_query.data[0]['full_name'],    
+            email=user_query.data[0]['email'],
+            owned_classrooms=owned_classrooms,
+            enrolled_as_admins=enrolled_as_admins,
+            enrolled_as_students=enrolled_as_students
         )
-
-
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching classrooms: {str(e)}")
-
-
-    
-
 
 @router.post("/dashboard")
 async def create_user_profile(user_profile: UserProfile, token=Depends(verify_token)):
@@ -79,11 +72,11 @@ async def create_user_profile(user_profile: UserProfile, token=Depends(verify_to
     
     user_query = supabase.table("profiles").select("user_name").eq("id", user_id).limit(1).execute()
     if user_query.data:
-        raise HTTPException(status_code=440, detail="User_already_exists")
+        raise HTTPException(status_code=409, detail="User profile already exists")
     
     profile_data = user_profile.dict(by_alias=False)
     profile_data["id"] = user_id
-    print("rec",profile_data)
+
     try:
         response = supabase.table("profiles").insert(profile_data).execute()
         
@@ -96,16 +89,13 @@ async def create_user_profile(user_profile: UserProfile, token=Depends(verify_to
         return {"message": "User profile created successfully", "status": "success"}
         
     except Exception as e:
-         
         raise HTTPException(
             status_code=500,
             detail=f"Failed to create user profile: {str(e)}"
         )
-    
 
 @router.get("/username/{user_name}")
 async def is_username_valid(user_name : str):
-
     user_query = supabase.table("profiles").select("user_name").eq("user_name", user_name).limit(1).execute()
     
     if not user_query.data:
