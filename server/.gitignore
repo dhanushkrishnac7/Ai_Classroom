@@ -15,6 +15,6 @@ env/
 .vscode/
 
 .pytest_cache/
-
+server/.env
 .mypy_cache/
 
