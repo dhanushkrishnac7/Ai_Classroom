@@ -10,6 +10,7 @@ class OwnedClassroom(BaseModel):
     class Config:
         populate_by_name = True
 
+
 class EnrolledClassroom(BaseModel):
     classroom_id: int = Field(..., alias="classroomId")
     classroom_name: str = Field(..., alias="classroomName")
@@ -19,6 +20,7 @@ class EnrolledClassroom(BaseModel):
 
     class Config:
         populate_by_name = True
+
 
 class DashboardResponse(BaseModel):
     message: str = Field(..., alias="message")
@@ -31,6 +33,7 @@ class DashboardResponse(BaseModel):
 
     class Config:
         populate_by_name = True
+        
 
 class UserProfile(BaseModel):
     user_name: str = Field(..., alias="userName")
