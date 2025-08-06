@@ -49,17 +49,12 @@ class Settings(BaseSettings):
     DIAGRAM_MAX_HEIGHT: int = 1024
     DIAGRAM_JPEG_QUALITY: int = 75
 
-    # Rate Limiting
-    OCR_BURST_LIMIT: int = 60
-    OCR_PAUSE_SECONDS: int = 10
-    EMBEDDING_BURST_LIMIT: int = 300
-    EMBEDDING_PAUSE_SECONDS: int = 5
-    GPT4O_BURST_LIMIT: int = 50
-    GPT4O_PAUSE_SECONDS: int = 60
-    DEEPSEEK_BURST_LIMIT: int = 200
-    DEEPSEEK_PAUSE_SECONDS: int = 60  # Updated from 30 to 60
-    GPT4O_CONCURRENCY_LIMIT: int = 10
-
+    # Rate Limiting (Requests Per Minute)
+    OCR_RPM: int = 50
+    EMBEDDING_RPM: int = 250
+    GPT4O_RPM: int = 40
+    DEEPSEEK_RPM: int = 180
+    
     class Config:
         env_file = ".env"
         extra = 'ignore'

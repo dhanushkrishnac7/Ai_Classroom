@@ -31,14 +31,15 @@ settings = get_settings()
 logger = logging.getLogger(__name__)
 
 async def _verify_admin_or_owner(classroom_id: int, user_id: str) -> bool:
+    supabase = client_manager.get_supabase_client()
     owner_res = await asyncio.to_thread(
-        client_manager.supabase.table("classrooms").select("owner_id").eq("id", classroom_id).single().execute
+        supabase.table("classrooms").select("owner_id").eq("id", classroom_id).single().execute
     )
     if owner_res.data and owner_res.data['owner_id'] == user_id:
         return True
     
     admin_res = await asyncio.to_thread(
-        client_manager.supabase.table("admins_of_classrooms").select("id").eq("classroom_id", classroom_id).eq("profile_id", user_id).execute
+        supabase.table("admins_of_classrooms").select("id").eq("classroom_id", classroom_id).eq("profile_id", user_id).execute
     )
     if admin_res.data:
         return True
@@ -81,8 +82,9 @@ async def add_document_to_classroom(
             'total_chunks_in_doc': 0
         }
         
+        supabase = client_manager.get_supabase_client()
         insert_response = await asyncio.to_thread(
-            client_manager.supabase.table('documents_uploaded').insert(initial_doc_record).execute
+            supabase.table('documents_uploaded').insert(initial_doc_record).execute
         )
         if not insert_response.data:
             raise HTTPException(status_code=500, detail="Failed to create initial document record.")
@@ -139,12 +141,14 @@ async def add_document_to_classroom(
             logger.info(f"Doc '{doc_id}': Stored {chunks_added} chunks in 'document_chunks' table.")
 
             update_record = {'total_chunks_in_doc': chunks_added, 'total_pages': total_pages}
+            supabase = client_manager.get_supabase_client()
             await asyncio.to_thread(
-                client_manager.supabase.table('documents_uploaded').update(update_record).eq('document_id', doc_id).execute
+                supabase.table('documents_uploaded').update(update_record).eq('document_id', doc_id).execute
             )
 
+        supabase = client_manager.get_supabase_client()
         final_doc_response = await asyncio.to_thread(
-            client_manager.supabase.table('documents_uploaded').select('*').eq('document_id', doc_id).single().execute
+            supabase.table('documents_uploaded').select('*').eq('document_id', doc_id).single().execute
         )
         final_doc = final_doc_response.data
         processing_time = time.time() - start_time
@@ -192,8 +196,9 @@ async def add_video_to_classroom(
             'origin_blog': origin_blog, 'origin_work': origin_work
         }
         
+        supabase = client_manager.get_supabase_client()
         response = await asyncio.to_thread(
-            client_manager.supabase.table('videos_uploaded').insert(video_record).execute
+            supabase.table('videos_uploaded').insert(video_record).execute
         )
         
         if not response.data:
@@ -213,8 +218,9 @@ async def add_blog_to_classroom(classroom_id: int, blog_data: AddBlog, token: di
     insert_data = blog_data.model_dump()
     insert_data.update({'classroom_id': classroom_id, 'uploaded_by': user_id})
     
+    supabase = client_manager.get_supabase_client()
     response = await asyncio.to_thread(
-        client_manager.supabase.table("blogs_uploaded").insert(insert_data).execute
+        supabase.table("blogs_uploaded").insert(insert_data).execute
     )
     if not response.data:
         raise HTTPException(status_code=500, detail="Failed to create blog post.")
@@ -231,8 +237,9 @@ async def assign_work_to_classroom(classroom_id: int, work_data: AssignWork, tok
     insert_data = work_data.model_dump()
     insert_data.update({'classroom_id': classroom_id, 'assigned_by': user_id})
     
+    supabase = client_manager.get_supabase_client()
     response = await asyncio.to_thread(
-        client_manager.supabase.table("work_assigned").insert(insert_data).execute
+        supabase.table("work_assigned").insert(insert_data).execute
     )
     if not response.data:
         raise HTTPException(status_code=500, detail="Failed to assign work.")

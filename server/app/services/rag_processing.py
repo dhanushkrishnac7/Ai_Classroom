@@ -12,8 +12,9 @@ from langchain_core.messages import SystemMessage, HumanMessage
 
 from app.core.config import get_settings
 from app.core.clients import (
-    ocr_client, blob_service_client, embeddings_client,
-    deepseek_llm, supabase, gpt4o_chat_llm
+    client_manager, # Changed from importing supabase directly
+    blob_service_client, embeddings_client,
+    deepseek_llm, gpt4o_chat_llm, ocr
 )
 from app.services.rate_limiter import rate_limiter
 
@@ -25,22 +26,23 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 settings = get_settings()
 logger = logging.getLogger(__name__)
 
-# --- Constants and Concurrency ---
+# --- Constants ---
 DEEPSEEK_SUMMARY_PROMPT = "Summarize the following technical text. Focus on retaining all key technical terms, specifications, data points, and core concepts. Be concise and remove any filler content."
 DIAGRAM_DESCRIPTION_SYSTEM_PROMPT = "You are a specialist in technical and systems analysis. Analyze the provided image, which is a technical diagram. Your description should be detailed and structured. Use markdown lists to break down the components. Identify all visible elements, including shapes, icons, labels, and text. Describe the connections, arrows, and flows between components to explain their relationships and interactions. Infer the overall purpose or function of the system depicted in the diagram based on its structure."
-gpt4o_semaphore = asyncio.Semaphore(settings.GPT4O_CONCURRENCY_LIMIT)
 
 # --- Core Functions ---
 async def _invoke_deepseek_summarizer(text_to_summarize: str) -> str:
     if not deepseek_llm:
         logger.warning("DeepSeek summarizer not configured. Summarization will be skipped.")
         return text_to_summarize
-    
+
+    logger.info("Starting summarization for a chunk.")
     await rate_limiter.check_and_wait('deepseek')
     messages = [SystemMessage(content=DEEPSEEK_SUMMARY_PROMPT), HumanMessage(content=text_to_summarize)]
     try:
         response = await deepseek_llm.ainvoke(messages)
         summary = response.content.strip()
+        logger.info("Successfully summarized a chunk.")
         return summary if summary else text_to_summarize
     except Exception as e:
         logger.error(f"Error calling DeepSeek API, returning original text: {e}")
@@ -50,6 +52,7 @@ async def upload_file_to_blob(file_data: bytes, container_name: str, blob_name: 
     try:
         blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_name)
         await blob_client.upload_blob(file_data, overwrite=True)
+        logger.info(f"Successfully uploaded {blob_name} to {container_name}")
         return blob_client.url
     except Exception as e:
         logger.error(f"Failed to upload {blob_name} to {container_name}: {e}")
@@ -99,9 +102,9 @@ async def generate_embeddings_safely(chunks: List[str]) -> List[List[float]]:
 async def extract_text_from_pdf(file_data: bytes) -> Tuple[List[str], int]:
     with fitz.open(stream=file_data, filetype='pdf') as doc:
         total_pages = doc.page_count
-        page_batches = [(i, min(i + settings.BATCH_SIZE - 1, total_pages - 1)) for i in range(0, total_pages, settings.BATCH_SIZE)]
-        
-        async with ocr_client as client:
+        page_batches = [(i, min(i + 1, total_pages - 1)) for i in range(0, total_pages, 2)]
+
+        async with ocr as client:
             pollers = []
             for start, end in page_batches:
                 await rate_limiter.check_and_wait('ocr')
@@ -119,7 +122,7 @@ async def extract_text_from_pdf(file_data: bytes) -> Tuple[List[str], int]:
                 logger.info(f"OCR: Received text for pages {start_idx+1}-{start_idx + len(result.pages)}.")
 
             await asyncio.gather(*(gather_results(p, s) for p, s in pollers))
-        
+
         logger.info(f"Completed OCR for {total_pages} pages.")
         return all_page_texts, total_pages
 
@@ -131,6 +134,7 @@ async def store_chunks_in_supabase(chunk_data: List[Dict], doc_id: str, user_id:
         'classroom_id': classroom_id, 'unit_no': unit_no
     } for i, d in enumerate(chunk_data)]
     try:
+        supabase = client_manager.get_supabase_client()
         res = await asyncio.to_thread(supabase.table('document_chunks').insert(rows).execute)
         return len(res.data)
     except Exception as e:
@@ -143,26 +147,26 @@ async def _invoke_gpt4o_diagram(image_data: bytes, prompt: str, task_name: str) 
     if not gpt4o_chat_llm:
         logger.warning("GPT-4o client not available. Skipping diagram description.")
         return "Diagram description not available."
-    
+
     await rate_limiter.check_and_wait('gpt4o')
-    async with gpt4o_semaphore:
-        logger.info(f"Invoking GPT-4o for diagram: {task_name}")
-        image_b64 = base64.b64encode(image_data).decode("utf-8")
-        messages = [
-            SystemMessage(content=DIAGRAM_DESCRIPTION_SYSTEM_PROMPT),
-            HumanMessage(content=[
-                {"type": "text", "text": prompt},
-                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"}}
-            ])
-        ]
-        try:
-            response = await gpt4o_chat_llm.ainvoke(messages)
-            if response.content:
-                return response.content.strip()
-            raise Exception("Empty response from GPT-4o vision")
-        except Exception as e:
-            logger.error(f"Error invoking GPT-4o vision for {task_name}: {e}")
-            raise
+    logger.info(f"Invoking GPT-4o for diagram: {task_name}")
+    image_b64 = base64.b64encode(image_data).decode("utf-8")
+    messages = [
+        SystemMessage(content=DIAGRAM_DESCRIPTION_SYSTEM_PROMPT),
+        HumanMessage(content=[
+            {"type": "text", "text": prompt},
+            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"}}
+        ])
+    ]
+    try:
+        response = await gpt4o_chat_llm.ainvoke(messages)
+        if response.content:
+            logger.info(f"Received diagram description for {task_name}")
+            return response.content.strip()
+        raise Exception("Empty response from GPT-4o vision")
+    except Exception as e:
+        logger.error(f"Error invoking GPT-4o vision for {task_name}: {e}")
+        raise
 
 def compress_image(image_data: bytes, max_width: int, max_height: int, quality: int) -> bytes:
     with Image.open(io.BytesIO(image_data)) as img:
@@ -206,10 +210,10 @@ async def extract_and_compress_page_image(file_data: bytes, page_num: int) -> Op
             pix = await asyncio.to_thread(doc[page_num].get_pixmap, matrix=fitz.Matrix(2.0, 2.0))
             raw_image_data = await asyncio.to_thread(pix.tobytes, output="png")
             return await asyncio.to_thread(
-                compress_image, 
-                raw_image_data, 
-                settings.DIAGRAM_MAX_WIDTH, 
-                settings.DIAGRAM_MAX_HEIGHT, 
+                compress_image,
+                raw_image_data,
+                settings.DIAGRAM_MAX_WIDTH,
+                settings.DIAGRAM_MAX_HEIGHT,
                 settings.DIAGRAM_JPEG_QUALITY
             )
     except Exception as e:

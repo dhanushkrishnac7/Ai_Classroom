@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from app.services.auth import verify_token
-from app.core.clients import supabase
+from app.core.clients import client_manager
 from app.schemas.dashboard import DashboardResponse, EnrolledClassroom, OwnedClassroom, UserProfile
 
 router = APIRouter()
@@ -8,6 +8,7 @@ router = APIRouter()
 @router.get("/dashboard", response_model=DashboardResponse)
 async def get_dashboard(token: dict = Depends(verify_token)):
     user_id = token["sub"]
+    supabase = client_manager.get_supabase_client()
 
     user_query = supabase.table("profiles").select("user_name, full_name, email").eq("id", user_id).limit(1).execute()
     if not user_query.data:
@@ -66,6 +67,7 @@ async def get_dashboard(token: dict = Depends(verify_token)):
 @router.post("/dashboard", status_code=201)
 async def create_user_profile(user_profile: UserProfile, token: dict = Depends(verify_token)):
     user_id = token["sub"]
+    supabase = client_manager.get_supabase_client()
     
     user_query = supabase.table("profiles").select("user_name").eq("id", user_id).limit(1).execute()
     if user_query.data:
@@ -93,6 +95,7 @@ async def create_user_profile(user_profile: UserProfile, token: dict = Depends(v
 
 @router.get("/username/{user_name}")
 async def is_username_valid(user_name: str):
+    supabase = client_manager.get_supabase_client()
     user_query = supabase.table("profiles").select("user_name").eq("user_name", user_name).limit(1).execute()
     
     if not user_query.data:

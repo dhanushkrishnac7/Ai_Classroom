@@ -15,8 +15,6 @@ logger = logging.getLogger(__name__)
 
 class ClientManager:
     def __init__(self):
-        self._supabase = None
-        self._ocr = None
         self._blob_service_client = None
         self._embeddings = None
         self._deepseek_llm = None
@@ -25,17 +23,13 @@ class ClientManager:
         if settings.GEMINI_API_KEY:
             genai.configure(api_key=settings.GEMINI_API_KEY)
 
-    @property
-    def supabase(self) -> Client:
-        if not self._supabase:
-            self._supabase = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
-        return self._supabase
+    def get_supabase_client(self) -> Client:
+        """Creates and returns a new Supabase client."""
+        return create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
 
     @property
     def ocr(self) -> DocumentAnalysisClient:
-        if not self._ocr:
-            self._ocr = DocumentAnalysisClient(settings.OCR_ENDPOINT, AzureKeyCredential(settings.OCR_KEY))
-        return self._ocr
+        return DocumentAnalysisClient(settings.OCR_ENDPOINT, AzureKeyCredential(settings.OCR_KEY))
 
     @property
     def blob_service_client(self) -> BlobServiceClient:
@@ -93,8 +87,7 @@ class ClientManager:
 client_manager = ClientManager()
 
 # Make clients directly accessible
-supabase = client_manager.supabase
-ocr_client = client_manager.ocr
+ocr = client_manager.ocr
 blob_service_client = client_manager.blob_service_client
 embeddings_client = client_manager.embeddings
 deepseek_llm = client_manager.deepseek_llm
