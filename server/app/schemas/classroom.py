@@ -8,6 +8,7 @@ class DocumentsUploaded(BaseModel):
     uploaded_at: Any = Field(..., alias="uploadedAt")
     uploaded_by: str = Field(..., alias="uploadedBy")
     classroom_id: int = Field(..., alias="classroomId")
+    status: str = Field("processing", alias="status")  # New status field
     unit_no: Optional[int] = Field(None, alias="unitNo")
     is_class_context: bool = Field(False, alias="isClassContext")
     origin_blog: Optional[str] = Field(None, alias="originBlog")

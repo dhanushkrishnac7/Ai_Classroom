@@ -2,10 +2,12 @@ import google.generativeai as genai
 from azure.core.credentials import AzureKeyCredential
 from azure.ai.formrecognizer.aio import DocumentAnalysisClient
 from azure.storage.blob.aio import BlobServiceClient
+from azure.core.exceptions import ResourceExistsError
 from supabase import create_client, Client
 from langchain_openai import AzureOpenAIEmbeddings, AzureChatOpenAI
 import tiktoken
 import logging
+import asyncio
 from typing import Optional
 
 from app.core.config import get_settings
@@ -20,6 +22,7 @@ class ClientManager:
         self._deepseek_llm = None
         self._gpt4o_chat_llm = None
         self._encoding = None
+        self._ocr_client = None
         if settings.GEMINI_API_KEY:
             genai.configure(api_key=settings.GEMINI_API_KEY)
 
@@ -29,13 +32,40 @@ class ClientManager:
 
     @property
     def ocr(self) -> DocumentAnalysisClient:
-        return DocumentAnalysisClient(settings.OCR_ENDPOINT, AzureKeyCredential(settings.OCR_KEY))
+        """Returns a shared OCR client, creating it if it doesn't exist."""
+        if not self._ocr_client:
+            self._ocr_client = DocumentAnalysisClient(settings.OCR_ENDPOINT, AzureKeyCredential(settings.OCR_KEY))
+        return self._ocr_client
 
     @property
     def blob_service_client(self) -> BlobServiceClient:
+        """Returns a shared Blob service client with increased timeouts."""
         if not self._blob_service_client:
-            self._blob_service_client = BlobServiceClient.from_connection_string(settings.AZURE_STORAGE_CONNECTION_STRING)
+            self._blob_service_client = BlobServiceClient.from_connection_string(
+                settings.AZURE_STORAGE_CONNECTION_STRING,
+                connection_timeout=300,  # 5 minutes
+                read_timeout=300  # 5 minutes
+            )
         return self._blob_service_client
+
+    async def ensure_containers_exist(self):
+        """Ensure all required Azure Storage containers exist."""
+        containers = [
+            settings.AZURE_STORAGE_CONTAINER_NAME,
+            settings.AZURE_DOCS_CONTAINER_NAME,
+            settings.AZURE_VIDEOS_CONTAINER_NAME
+        ]
+        
+        for container_name in containers:
+            try:
+                container_client = self.blob_service_client.get_container_client(container_name)
+                await container_client.create_container()
+                logger.info(f"Created Azure Storage container: {container_name}")
+            except ResourceExistsError:
+                logger.debug(f"Azure Storage container already exists: {container_name}")
+            except Exception as e:
+                logger.error(f"Failed to create container {container_name}: {e}")
+                raise
 
     @property
     def embeddings(self) -> AzureOpenAIEmbeddings:
@@ -87,7 +117,6 @@ class ClientManager:
 client_manager = ClientManager()
 
 # Make clients directly accessible
-ocr = client_manager.ocr
 blob_service_client = client_manager.blob_service_client
 embeddings_client = client_manager.embeddings
 deepseek_llm = client_manager.deepseek_llm

@@ -7,24 +7,25 @@ settings = get_settings()
 http_bearer = HTTPBearer()
 
 def verify_token(credentials: HTTPAuthorizationCredentials = Depends(http_bearer)):
+    """Verifies the JWT token from the Authorization header."""
     token = credentials.credentials
     if not token:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, 
+            status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token is missing"
         )
-    
+
     try:
         decoded = jwt.decode(
-            token, 
-            settings.SUPABASE_JWT_SECRET, 
+            token,
+            settings.SUPABASE_JWT_SECRET,
             algorithms=["HS256"],
             audience="authenticated"
         )
         return decoded
-    
+
     except jwt.PyJWTError as e:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, 
+            status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Token is not valid: {str(e)}"
         )
