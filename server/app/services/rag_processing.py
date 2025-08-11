@@ -18,7 +18,6 @@ from app.core.clients import (
     deepseek_llm, gpt4o_chat_llm
 )
 from app.services.rate_limiter import rate_limiter
-from app.utils.performance_logger import PerformanceTracker
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -55,15 +54,14 @@ async def process_document_background(
 ):
     """This function runs in the background to process the document."""
     supabase = client_manager.get_supabase_client()
-    doc_tracker = PerformanceTracker("document_processing", doc_id).start()
     try:
-        pages_content, total_pages = await extract_text_from_pdf(file_data, doc_tracker)
+        pages_content, total_pages = await extract_text_from_pdf(file_data)
         diagram_page_indices = await identify_diagram_pages(file_data)
-        diagram_data = await process_diagrams(file_data, diagram_page_indices, doc_id, doc_tracker)
+        diagram_data = await process_diagrams(file_data, diagram_page_indices, doc_id)
         if not any(pages_content) and not diagram_data:
             raise ValueError("No text or diagrams could be extracted from the document.")
         _, chunks_added = await process_and_store_chunks(
-            pages_content, diagram_data, filename, total_pages, doc_id, user_id, classroom_id, unit_no, doc_tracker
+            pages_content, diagram_data, filename, total_pages, doc_id, user_id, classroom_id, unit_no
         )
         update_record = {
             'total_chunks_in_doc': chunks_added,
@@ -73,10 +71,6 @@ async def process_document_background(
         await asyncio.to_thread(
             supabase.table('documents_uploaded').update(update_record).eq('document_id', doc_id).execute
         )
-        doc_tracker.finish({
-            "filename": filename,
-            "file_size_mb": round(len(file_data) / (1024 * 1024), 2)
-        })
         logger.info(f"Doc '{doc_id}': Successfully completed background processing.")
     except Exception as e:
         logger.error(f"Doc '{doc_id}': Background processing failed: {e}", exc_info=True)
@@ -84,8 +78,7 @@ async def process_document_background(
             supabase.table('documents_uploaded').update({'status': 'failed'}).eq('document_id', doc_id).execute
         )
 
-async def extract_text_from_pdf(file_data: bytes, performance_tracker: PerformanceTracker) -> Tuple[List[str], int]:
-    ocr_start_time = time.time()
+async def extract_text_from_pdf(file_data: bytes) -> Tuple[List[str], int]:
     with fitz.open(stream=file_data, filetype='pdf') as doc:
         total_pages = doc.page_count
         batch_size = 2
@@ -95,41 +88,32 @@ async def extract_text_from_pdf(file_data: bytes, performance_tracker: Performan
         
         all_page_texts = [""] * total_pages
         
-        with open("result.txt", "a") as result_file:
-            async def process_batch(start_page, end_page):
-                await rate_limiter.check_and_wait('ocr')
-                try:
-                    with fitz.open() as temp_doc:
-                        temp_doc.insert_pdf(doc, from_page=start_page, to_page=end_page)
-                        poller = await client_manager.ocr.begin_analyze_document("prebuilt-read", temp_doc.tobytes())
-                        result = await poller.result()
-                    
-                    for page in result.pages:
-                        page_idx = start_page + page.page_number - 1
-                        if page_idx < total_pages:
-                            extracted_text = clean_text("\n".join(line.content for line in page.lines))
-                            all_page_texts[page_idx] = extracted_text
-                            
-                            result_file.write(f"--- Page {page_idx + 1} ---\n")
-                            result_file.write(extracted_text)
-                            result_file.write("\n\n")
+        async def process_batch(start_page, end_page):
+            await rate_limiter.check_and_wait('ocr')
+            try:
+                with fitz.open() as temp_doc:
+                    temp_doc.insert_pdf(doc, from_page=start_page, to_page=end_page)
+                    poller = await client_manager.ocr.begin_analyze_document("prebuilt-read", temp_doc.tobytes())
+                    result = await poller.result()
+                
+                for page in result.pages:
+                    page_idx = start_page + page.page_number - 1
+                    if page_idx < total_pages:
+                        extracted_text = clean_text("\n".join(line.content for line in page.lines))
+                        all_page_texts[page_idx] = extracted_text
 
-                except Exception as e:
-                    logger.error(f"OCR: Failed to process pages {start_page+1}-{end_page+1}: {e}")
+            except Exception as e:
+                logger.error(f"OCR: Failed to process pages {start_page+1}-{end_page+1}: {e}")
 
-            tasks = [process_batch(start, end) for start, end in page_batches]
-            await asyncio.gather(*tasks, return_exceptions=True)
+        tasks = [process_batch(start, end) for start, end in page_batches]
+        await asyncio.gather(*tasks, return_exceptions=True)
 
-    ocr_duration = time.time() - ocr_start_time
-    performance_tracker.log_metric("ocr_time", round(ocr_duration, 2))
-    logger.info(f"Completed OCR for {total_pages} pages in {ocr_duration:.2f}s.")
+    logger.info(f"Completed OCR for {total_pages} pages.")
     return all_page_texts, total_pages
 
-async def process_diagrams(file_data: bytes, diagram_pages: List[int], document_id: str, performance_tracker: PerformanceTracker) -> Dict[int, Tuple[str, str]]:
+async def process_diagrams(file_data: bytes, diagram_pages: List[int], document_id: str) -> Dict[int, Tuple[str, str]]:
     if not diagram_pages:
         return {}
-    
-    diagram_start_time = time.time()
     
     async def _process_single_diagram(page_idx: int):
         try:
@@ -148,13 +132,9 @@ async def process_diagrams(file_data: bytes, diagram_pages: List[int], document_
     tasks = [_process_single_diagram(page_idx) for page_idx in diagram_pages]
     results = await asyncio.gather(*tasks)
     
-    diagram_duration = time.time() - diagram_start_time
-    performance_tracker.log_metric("diagram_time", round(diagram_duration, 2))
-    
     return {page_idx: result_tuple for page_idx, result_tuple in results if result_tuple is not None}
 
-async def process_and_store_chunks(pages_content, diagram_data, filename, total_pages, doc_id, user_id, classroom_id, unit_no, doc_tracker):
-    chunk_start = time.time()
+async def process_and_store_chunks(pages_content, diagram_data, filename, total_pages, doc_id, user_id, classroom_id, unit_no):
     all_chunks_to_process = []
     base_meta = {'filename': filename, 'total_pages': total_pages, 'document_id': doc_id}
     for i, page_text in enumerate(pages_content):
@@ -174,25 +154,18 @@ async def process_and_store_chunks(pages_content, diagram_data, filename, total_
     if not all_chunks_to_process:
         raise HTTPException(status_code=400, detail="Document content is too sparse to be processed.")
     
-    doc_tracker.log_metric("chunk_time", round(time.time() - chunk_start, 2))
     logger.info(f"Doc '{doc_id}': Document split into {len(all_chunks_to_process)} chunks.")
 
     # Summarization, Embedding, and Storage
-    summary_start = time.time()
     summarized_contents = await asyncio.gather(*[_invoke_deepseek_summarizer(item['content']) for item in all_chunks_to_process])
     for i, item in enumerate(all_chunks_to_process):
         item['content'] = summarized_contents[i]
-    doc_tracker.log_metric("summary_time", round(time.time() - summary_start, 2))
 
-    embedding_start = time.time()
     embeddings = await generate_embeddings_safely([item['content'] for item in all_chunks_to_process])
     for i, item in enumerate(all_chunks_to_process):
         item['embedding'] = embeddings[i]
-    doc_tracker.log_metric("embedding_time", round(time.time() - embedding_start, 2))
 
-    storage_start = time.time()
     chunks_added = await store_chunks_in_supabase(all_chunks_to_process, doc_id, user_id, classroom_id, unit_no)
-    doc_tracker.log_metric("storage_time", round(time.time() - storage_start, 2))
 
     return all_chunks_to_process, chunks_added
 
