@@ -8,8 +8,7 @@ class DocumentsUploaded(BaseModel):
     uploaded_at: Any = Field(..., alias="uploadedAt")
     uploaded_by: str = Field(..., alias="uploadedBy")
     classroom_id: int = Field(..., alias="classroomId")
-    status: str = Field("processing", alias="status")  # New status field
-    unit_no: Optional[int] = Field(None, alias="unitNo")
+    status: str = Field("processing", alias="status")
     is_class_context: bool = Field(False, alias="isClassContext")
     origin_blog: Optional[str] = Field(None, alias="originBlog")
     origin_work: Optional[str] = Field(None, alias="originWork")
@@ -26,7 +25,6 @@ class VideoUploaded(BaseModel):
     uploaded_at: Any = Field(..., alias="uploadedAt")
     uploaded_by: str = Field(..., alias="uploadedBy")
     classroom_id: int = Field(..., alias="classroomId")
-    unit_no: Optional[int] = Field(None, alias="unitNo")
     
     class Config:
         populate_by_name = True
@@ -41,7 +39,6 @@ class BlogsUploaded(BaseModel):
     uploaded_at: Any
     uploaded_by: str
     classroom_id: int
-    unit_no: Optional[int] = None
     class Config: 
         from_attributes = True
 
@@ -54,7 +51,6 @@ class WorkAssigned(BaseModel):
     due_date: Any
     assigned_by: str
     classroom_id: int
-    unit_no: Optional[int] = None
     class Config: 
         from_attributes = True
 
@@ -71,14 +67,3 @@ class ClassDetails(BaseModel):
     works_assigned: List[WorkAssigned] = Field(default_factory=list)
     class Config: 
         from_attributes = True
-
-class AddBlog(BaseModel):
-    title: str
-    context: str
-    unit_no: Optional[int] = None
-
-class AssignWork(BaseModel):
-    work_title: str
-    work_description: str
-    due_date: str
-    unit_no: Optional[int] = None

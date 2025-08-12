@@ -48,7 +48,6 @@ async def process_document_background(
     doc_id: str,
     user_id: str,
     classroom_id: int,
-    unit_no: Optional[int],
     file_data: bytes,
     filename: str
 ):
@@ -61,7 +60,7 @@ async def process_document_background(
         if not any(pages_content) and not diagram_data:
             raise ValueError("No text or diagrams could be extracted from the document.")
         _, chunks_added = await process_and_store_chunks(
-            pages_content, diagram_data, filename, total_pages, doc_id, user_id, classroom_id, unit_no
+            pages_content, diagram_data, filename, total_pages, doc_id, user_id, classroom_id
         )
         update_record = {
             'total_chunks_in_doc': chunks_added,
@@ -134,7 +133,7 @@ async def process_diagrams(file_data: bytes, diagram_pages: List[int], document_
     
     return {page_idx: result_tuple for page_idx, result_tuple in results if result_tuple is not None}
 
-async def process_and_store_chunks(pages_content, diagram_data, filename, total_pages, doc_id, user_id, classroom_id, unit_no):
+async def process_and_store_chunks(pages_content, diagram_data, filename, total_pages, doc_id, user_id, classroom_id):
     all_chunks_to_process = []
     base_meta = {'filename': filename, 'total_pages': total_pages, 'document_id': doc_id}
     for i, page_text in enumerate(pages_content):
@@ -165,7 +164,7 @@ async def process_and_store_chunks(pages_content, diagram_data, filename, total_
     for i, item in enumerate(all_chunks_to_process):
         item['embedding'] = embeddings[i]
 
-    chunks_added = await store_chunks_in_supabase(all_chunks_to_process, doc_id, user_id, classroom_id, unit_no)
+    chunks_added = await store_chunks_in_supabase(all_chunks_to_process, doc_id, user_id, classroom_id)
 
     return all_chunks_to_process, chunks_added
 
@@ -228,12 +227,12 @@ async def generate_embeddings_safely(chunks: List[str]) -> List[List[float]]:
             raise HTTPException(status_code=500, detail=f"Failed to generate embeddings: {e}")
     return embeddings_list
 
-async def store_chunks_in_supabase(chunk_data: List[Dict], doc_id: str, user_id: str, classroom_id: int, unit_no: int) -> int:
+async def store_chunks_in_supabase(chunk_data: List[Dict], doc_id: str, user_id: str, classroom_id: int) -> int:
     if not chunk_data: return 0
     rows = [{
         'document_id': doc_id, 'user_id': user_id, 'chunk_index': i,
         'content': d['content'], 'embedding': d['embedding'], 'metadata': d['metadata'],
-        'classroom_id': classroom_id, 'unit_no': unit_no
+        'classroom_id': classroom_id
     } for i, d in enumerate(chunk_data)]
     try:
         supabase = client_manager.get_supabase_client()
