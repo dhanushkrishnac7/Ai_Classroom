@@ -3,7 +3,7 @@ import { createContext, useEffect, useState } from "react"
 import { jwtDecode } from "jwt-decode"
 import AppSidebar from './compontents/Appsidebar/AppSidebar'
 import Header from './compontents/Appheaderbar/header'
-import { SidebarProvider, SidebarTrigger, SidebarInset } from "@/components/ui/sidebar"
+import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"
 
 export const fetchdata = createContext();// create thhe fetchdata
 export default  function RootLayout({ children }) {
@@ -27,7 +27,7 @@ export default  function RootLayout({ children }) {
         }
       }
     console.log("fecteching clasess...")
-      const res = await fetch("http://localhost:8000/dashboard", {
+      const res = await fetch("http://localhost:8000/api/dashboard", {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
