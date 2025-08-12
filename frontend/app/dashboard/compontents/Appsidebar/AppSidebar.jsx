@@ -108,7 +108,7 @@ function AppSidebar() {
                   </CollapsibleTrigger>
 
                   <CollapsibleContent className="p-3 ml-6 mt-1 space-y-1">
-                    {dashboardResponse?.enrolledClassroomsAsAdmins?.map((cls) => (
+                    {dashboardResponse?.enrolledAsAdmins?.map((cls) => (
                       <SidebarMenuButton
                         key={cls.classroomName}
                         className="text-sm hover:bg-purple-100 hover:text-purple-700"
@@ -135,7 +135,7 @@ function AppSidebar() {
                   </CollapsibleTrigger>
 
                   <CollapsibleContent className="p-3 ml-6  mt-1 space-y-1">
-                    {dashboardResponse?.enrolledClassroomsAsStudents?.map((cls) => (
+                    {dashboardResponse?.enrolledAsStudents?.map((cls) => (
                       <SidebarMenuButton
                         key={cls.classroomId}
                         className="text-sm hover:bg-purple-100 hover:text-purple-700"
