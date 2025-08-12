@@ -41,6 +41,7 @@ function Adminclasses() {
                   avatar: classItem.classroomName[0]?.toUpperCase(),
                   color: colors[idx%colors.length],
                   id: classItem.classroomId,
+                  role: classItem.role,
                 }}
               />
             ))}

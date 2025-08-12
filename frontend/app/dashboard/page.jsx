@@ -16,9 +16,9 @@ export default function HomePage() {
         <SidebarInset >
           
           <div className="bg-[#f5f5f5]">
+             <Ownedclasses /> 
+              <Adminclasses/>  
             <Myclasses /> 
-             <Ownedclasses />   
-             <Adminclasses/>
           </div>
           
         </SidebarInset>

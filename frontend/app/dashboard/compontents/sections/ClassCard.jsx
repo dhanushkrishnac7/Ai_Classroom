@@ -17,7 +17,7 @@ const ClassCard = ({ classItem, showStudents }) => {
       console.error("Class ID is not defined");
       return;
     }
-    router.push(`dashboard/classes/${classid}`)
+    router.push(`dashboard/classes/${classItem.role}/${classid}`)
   }
 
   return (
