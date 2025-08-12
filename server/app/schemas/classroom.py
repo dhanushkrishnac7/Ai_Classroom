@@ -13,7 +13,7 @@ class DocumentsUploaded(BaseModel):
     origin_blog: Optional[str] = Field(None, alias="originBlog")
     origin_work: Optional[str] = Field(None, alias="originWork")
     total_chunks_in_doc: Optional[int] = None
-    
+
     class Config:
         populate_by_name = True
         from_attributes = True
@@ -25,7 +25,7 @@ class VideoUploaded(BaseModel):
     uploaded_at: Any = Field(..., alias="uploadedAt")
     uploaded_by: str = Field(..., alias="uploadedBy")
     classroom_id: int = Field(..., alias="classroomId")
-    
+
     class Config:
         populate_by_name = True
         from_attributes = True
@@ -39,7 +39,7 @@ class BlogsUploaded(BaseModel):
     uploaded_at: Any
     uploaded_by: str
     classroom_id: int
-    class Config: 
+    class Config:
         from_attributes = True
 
 class WorkAssigned(BaseModel):
@@ -51,19 +51,5 @@ class WorkAssigned(BaseModel):
     due_date: Any
     assigned_by: str
     classroom_id: int
-    class Config: 
-        from_attributes = True
-
-class ClassDetails(BaseModel):
-    id: int
-    classname: str
-    role: str
-    owner: str
-    admins: List[str]
-    students: List[str]
-    documents_uploaded: List[DocumentsUploaded] = Field(default_factory=list)
-    videos_uploaded: List[VideoUploaded] = Field(default_factory=list)
-    blogs_uploaded: List[BlogsUploaded] = Field(default_factory=list)
-    works_assigned: List[WorkAssigned] = Field(default_factory=list)
-    class Config: 
+    class Config:
         from_attributes = True
