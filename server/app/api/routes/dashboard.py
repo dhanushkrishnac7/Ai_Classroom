@@ -12,7 +12,7 @@ async def get_dashboard(token: dict = Depends(verify_token)):
 
     user_query = supabase.table("profiles").select("user_name, full_name, email").eq("id", user_id).limit(1).execute()
     if not user_query.data:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=440, detail="User not found")
 
     try:
         owned_classrooms_response = supabase.table("classrooms").select("id, classname").eq("owner_id", user_id).execute()

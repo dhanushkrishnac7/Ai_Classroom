@@ -39,6 +39,7 @@ function Ownedclasses() {
                   avatar: classItem.classname[0]?.toUpperCase(),
                   color: colors[idx%colors.length],
                   id: classItem.id,
+                  role: classItem.role,
                 }}
               />
             ))}
