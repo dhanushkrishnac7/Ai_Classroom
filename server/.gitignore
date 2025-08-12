@@ -1,20 +1,11 @@
-**/__pycache__/
-*.py[cod]
-*$py.class
+# Environment variables
+.env
+*.env
 
+# Python
 venv/
-env/
 .venv/
-.env/
+__pycache__/
 
-venv/
-env/
-.venv/
-.env/
-
+# IDE
 .vscode/
-
-.pytest_cache/
-
-.mypy_cache/
-
