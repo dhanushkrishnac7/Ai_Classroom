@@ -1,4 +1,5 @@
 "use client"
+import Link from 'next/link';
 
 import {
   ChevronDown,
@@ -38,7 +39,7 @@ import { fetchdata } from "../../layout"
 
 function AppSidebar() {
   const { dashboardResponse ,user} = useContext(fetchdata)
-console.log("user",user)
+  console.log("user",user)
   
 
   return (
@@ -71,13 +72,13 @@ console.log("user",user)
               <Collapsible className="group/collapsible">
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild className="h-13">
-                    <SidebarMenuButton className="flex justify-between items-center hover:bg-purple-100 hover:text-purple-700">
-                      <div className="flex gap-2 items-center">
-                        <User className="size-5" />
-                        <span className="text-lg p-4">Teaching</span>
-                      </div>
-                      <ChevronRight className="h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-90" />
-                    </SidebarMenuButton>
+                      <SidebarMenuButton className="flex justify-between items-center data-[state=active]:text-purple-700 data-[state=active]:bg-purple-100 hover:bg-purple-100 hover:text-purple-700 ">
+                        <div className="flex gap-2 items-center">
+                          <User className="size-5" />
+                          <span className="text-lg p-4">Teaching</span>
+                        </div>
+                        <ChevronRight className="h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-90" />
+                      </SidebarMenuButton>
                   </CollapsibleTrigger>
 
                   <CollapsibleContent className="p-3 ml-6 mt-1 space-y-1">
@@ -136,11 +137,12 @@ console.log("user",user)
                   <CollapsibleContent className="p-3 ml-6  mt-1 space-y-1">
                     {dashboardResponse?.enrolledClassroomsAsStudents?.map((cls) => (
                       <SidebarMenuButton
-                        key={cls.classroomName}
+                        key={cls.classroomId}
                         className="text-sm hover:bg-purple-100 hover:text-purple-700"
-                      >
-                        {cls.classroomName}{" "}
-                        <span className="text-xs text-muted-foreground">(by {cls.ownerName})</span>
+                        asChild
+                      ><Link href ={`/dashboard/classes/student/${cls.classroomId}`}> {cls.classroomName}{" "}
+                        <span className="text-xs text-muted-foreground">(by {cls.ownerName})</span></Link>
+                       
                       </SidebarMenuButton>
                     ))}
                   </CollapsibleContent>
