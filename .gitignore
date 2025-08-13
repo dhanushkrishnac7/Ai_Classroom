@@ -1,0 +1,31 @@
+# Global gitignore for the entire project
+# Technology-specific rules are in frontend/.gitignore and server/.gitignore
+
+# IDE files (global)
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files (global)
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Global logs
+logs/
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+
+# Global environment files (backup)
+.env.backup
+.env.example.local
