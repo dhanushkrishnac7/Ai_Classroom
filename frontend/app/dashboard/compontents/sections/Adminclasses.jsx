@@ -31,7 +31,7 @@ function Adminclasses() {
             </Badge>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {dashboardResponse?.enrolledClassroomsAsAdmins
+            {dashboardResponse?.enrolledAsAdmins
 ?.map((classItem,idx) => (
               <ClassCard
                 key={classItem.classroomId}
@@ -41,6 +41,7 @@ function Adminclasses() {
                   avatar: classItem.classroomName[0]?.toUpperCase(),
                   color: colors[idx%colors.length],
                   id: classItem.classroomId,
+                  role: classItem.role,
                 }}
               />
             ))}
