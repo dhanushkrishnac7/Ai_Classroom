@@ -13,7 +13,7 @@ from app.schemas.classroom import (
     DocumentsUploaded, VideoUploaded, BlogsUploaded, WorkAssigned
 )
 from app.services.auth import verify_token
-from app.services.rag_processing import upload_file_to_blob, validate_file as validate_pdf_file
+from app.services.rag_processing import upload_file_to_blob, validate_file
 from app.services.document_queue import document_queue
 
 router = APIRouter()
@@ -76,9 +76,19 @@ async def add_blog_to_classroom(
                 if file.filename:
                     file_id = str(uuid.uuid4())
                     data = await file.read()
+                    content_type = file.content_type
                     
-                    if file.content_type == "application/pdf":
-                        validate_pdf_file(file, data)
+                    if content_type.startswith("video/"):
+                        video_url = await upload_file_to_blob(data, settings.AZURE_VIDEOS_CONTAINER_NAME, f"{file_id}_{file.filename}")
+                        video_record = {
+                            'video_id': file_id, 'video_name': file.filename, 'video_url': video_url,
+                            'uploaded_by': user_id, 'classroom_id': classroom_id, 'origin_blog': blog_id
+                        }
+                        video_insert_res = await asyncio.to_thread(supabase.table('videos_uploaded').insert(video_record).execute)
+                        if video_insert_res.data:
+                            uploaded_videos_data.append(video_insert_res.data[0])
+                    else:
+                        validate_file(file, data)
                         doc_url = await upload_file_to_blob(data, settings.AZURE_DOCS_CONTAINER_NAME, f"{file_id}_{file.filename}")
                         doc_record = {
                             'document_id': file_id, 'uploaded_by': user_id, 'document_name': file.filename,
@@ -88,18 +98,11 @@ async def add_blog_to_classroom(
                         doc_insert_res = await asyncio.to_thread(supabase.table('documents_uploaded').insert(doc_record).execute)
                         if doc_insert_res.data:
                             uploaded_documents_data.append(doc_insert_res.data[0])
-                            task_data = {"doc_id": file_id, "user_id": user_id, "classroom_id": classroom_id, "file_data": data, "filename": file.filename}
+                            task_data = {
+                                "doc_id": file_id, "user_id": user_id, "classroom_id": classroom_id,
+                                "file_data": data, "filename": file.filename, "content_type": content_type
+                            }
                             await document_queue.add_to_queue(task_data)
-                    
-                    elif file.content_type and file.content_type.startswith("video/"):
-                        video_url = await upload_file_to_blob(data, settings.AZURE_VIDEOS_CONTAINER_NAME, f"{file_id}_{file.filename}")
-                        video_record = {
-                            'video_id': file_id, 'video_name': file.filename, 'video_url': video_url,
-                            'uploaded_by': user_id, 'classroom_id': classroom_id, 'origin_blog': blog_id
-                        }
-                        video_insert_res = await asyncio.to_thread(supabase.table('videos_uploaded').insert(video_record).execute)
-                        if video_insert_res.data:
-                            uploaded_videos_data.append(video_insert_res.data[0])
 
         new_blog['documents_uploaded'] = [DocumentsUploaded.model_validate(doc) for doc in uploaded_documents_data]
         new_blog['videos_uploaded'] = [VideoUploaded.model_validate(vid) for vid in uploaded_videos_data]
@@ -151,9 +154,19 @@ async def assign_work_to_classroom(
                 if file.filename:
                     file_id = str(uuid.uuid4())
                     data = await file.read()
+                    content_type = file.content_type
 
-                    if file.content_type == "application/pdf":
-                        validate_pdf_file(file, data)
+                    if content_type.startswith("video/"):
+                        video_url = await upload_file_to_blob(data, settings.AZURE_VIDEOS_CONTAINER_NAME, f"{file_id}_{file.filename}")
+                        video_record = {
+                            'video_id': file_id, 'video_name': file.filename, 'video_url': video_url,
+                            'uploaded_by': user_id, 'classroom_id': classroom_id, 'origin_work': work_id
+                        }
+                        video_insert_res = await asyncio.to_thread(supabase.table('videos_uploaded').insert(video_record).execute)
+                        if video_insert_res.data:
+                            uploaded_videos_data.append(video_insert_res.data[0])
+                    else:
+                        validate_file(file, data)
                         doc_url = await upload_file_to_blob(data, settings.AZURE_DOCS_CONTAINER_NAME, f"{file_id}_{file.filename}")
                         doc_record = {
                             'document_id': file_id, 'uploaded_by': user_id, 'document_name': file.filename,
@@ -163,18 +176,11 @@ async def assign_work_to_classroom(
                         doc_insert_res = await asyncio.to_thread(supabase.table('documents_uploaded').insert(doc_record).execute)
                         if doc_insert_res.data:
                             uploaded_documents_data.append(doc_insert_res.data[0])
-                            task_data = {"doc_id": file_id, "user_id": user_id, "classroom_id": classroom_id, "file_data": data, "filename": file.filename}
+                            task_data = {
+                                "doc_id": file_id, "user_id": user_id, "classroom_id": classroom_id,
+                                "file_data": data, "filename": file.filename, "content_type": content_type
+                            }
                             await document_queue.add_to_queue(task_data)
-
-                    elif file.content_type and file.content_type.startswith("video/"):
-                        video_url = await upload_file_to_blob(data, settings.AZURE_VIDEOS_CONTAINER_NAME, f"{file_id}_{file.filename}")
-                        video_record = {
-                            'video_id': file_id, 'video_name': file.filename, 'video_url': video_url,
-                            'uploaded_by': user_id, 'classroom_id': classroom_id, 'origin_work': work_id
-                        }
-                        video_insert_res = await asyncio.to_thread(supabase.table('videos_uploaded').insert(video_record).execute)
-                        if video_insert_res.data:
-                            uploaded_videos_data.append(video_insert_res.data[0])
 
         new_work['documents_uploaded'] = [DocumentsUploaded.model_validate(doc) for doc in uploaded_documents_data]
         new_work['videos_uploaded'] = [VideoUploaded.model_validate(vid) for vid in uploaded_videos_data]

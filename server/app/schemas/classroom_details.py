@@ -34,6 +34,8 @@ class UpcomingWork(BaseModel):
     work_id: str
     work_title: str
     due_date: Any
+    documents: List[DocumentDetail] = []
+    videos: List[VideoDetail] = []
 
 class ClassroomMember(BaseModel):
     id: str

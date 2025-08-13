@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 import logging
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import classroom, dashboard, exception_handler, classroom_details
 from app.core.config import get_settings
@@ -27,6 +28,16 @@ async def lifespan(app: FastAPI):
 
 # Create the FastAPI app instance with the lifespan manager
 app = FastAPI(title="AI Classroom API", lifespan=lifespan)
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allows all origins
+    allow_credentials=True,
+    allow_methods=["*"],  # Allows all methods
+    allow_headers=["*"],  # Allows all headers
+)
+
 
 # Add the custom exception handler
 app.add_exception_handler(Exception, exception_handler.http_exception_handler)

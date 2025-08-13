@@ -34,10 +34,10 @@ async def get_classroom_details(classroom_id: int, token: dict = Depends(verify_
     )
 
     # --- Process content (blogs and works) ---
-    docs_by_blog = {doc['origin_blog']: [] for doc in docs_res.data if doc.get('origin_blog')}
-    docs_by_work = {doc['origin_work']: [] for doc in docs_res.data if doc.get('origin_work')}
-    videos_by_blog = {vid['origin_blog']: [] for vid in videos_res.data if vid.get('origin_blog')}
-    videos_by_work = {vid['origin_work']: [] for vid in videos_res.data if vid.get('origin_work')}
+    docs_by_blog = {}
+    docs_by_work = {}
+    videos_by_blog = {}
+    videos_by_work = {}
 
     for doc in docs_res.data:
         if doc.get('origin_blog'):
@@ -79,7 +79,11 @@ async def get_classroom_details(classroom_id: int, token: dict = Depends(verify_
             if due_date_str:
                 due_date = datetime.strptime(due_date_str, '%Y-%m-%d').date()
                 if due_date >= today:
-                    upcoming_deadlines.append(UpcomingWork(**work))
+                    work_id = work['work_id']
+                    upcoming_work = UpcomingWork(**work)
+                    upcoming_work.documents = docs_by_work.get(work_id, [])
+                    upcoming_work.videos = videos_by_work.get(work_id, [])
+                    upcoming_deadlines.append(upcoming_work)
         upcoming_deadlines.sort(key=lambda x: x.due_date)
 
     # --- Process members ---

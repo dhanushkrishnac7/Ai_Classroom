@@ -7,6 +7,7 @@ import time
 from PIL import Image
 from typing import List, Tuple, Dict, Optional
 from fastapi import HTTPException, UploadFile
+import docx
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.messages import SystemMessage, HumanMessage
@@ -49,16 +50,30 @@ async def process_document_background(
     user_id: str,
     classroom_id: int,
     file_data: bytes,
-    filename: str
+    filename: str,
+    content_type: str
 ):
     """This function runs in the background to process the document."""
     supabase = client_manager.get_supabase_client()
     try:
-        pages_content, total_pages = await extract_text_from_pdf(file_data)
-        diagram_page_indices = await identify_diagram_pages(file_data)
-        diagram_data = await process_diagrams(file_data, diagram_page_indices, doc_id)
+        if content_type == "application/pdf":
+            pages_content, total_pages = await extract_text_from_pdf(file_data)
+            diagram_page_indices = await identify_diagram_pages(file_data)
+            diagram_data = await process_diagrams(file_data, diagram_page_indices, doc_id)
+        elif content_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+            pages_content, total_pages = await extract_text_from_docx(file_data)
+            diagram_data = {}
+        elif content_type.startswith("image/"):
+            description = await _invoke_gpt4o_diagram(file_data, "Describe this image in detail.", f"Image description ({filename})")
+            pages_content = [description]
+            total_pages = 1
+            diagram_data = {}
+        else:
+            raise ValueError(f"Unsupported content type for processing: {content_type}")
+
         if not any(pages_content) and not diagram_data:
             raise ValueError("No text or diagrams could be extracted from the document.")
+        
         _, chunks_added = await process_and_store_chunks(
             pages_content, diagram_data, filename, total_pages, doc_id, user_id, classroom_id
         )
@@ -76,6 +91,14 @@ async def process_document_background(
         await asyncio.to_thread(
             supabase.table('documents_uploaded').update({'status': 'failed'}).eq('document_id', doc_id).execute
         )
+
+async def extract_text_from_docx(file_data: bytes) -> Tuple[List[str], int]:
+    """Extracts text from a .docx file."""
+    document = docx.Document(io.BytesIO(file_data))
+    text = "\n".join([para.text for para in document.paragraphs])
+    # For simplicity, we'll treat the whole docx as a single "page"
+    return [text], 1
+
 
 async def extract_text_from_pdf(file_data: bytes) -> Tuple[List[str], int]:
     with fitz.open(stream=file_data, filetype='pdf') as doc:
@@ -179,7 +202,8 @@ async def _invoke_deepseek_summarizer(text_to_summarize: str) -> str:
     messages = [SystemMessage(content=DEEPSEEK_SUMMARY_PROMPT), HumanMessage(content=text_to_summarize)]
     try:
         response = await deepseek_llm.ainvoke(messages)
-        summary = response.content.strip()
+        # Strip the <think> block from the response
+        summary = response.content.split('</think>')[-1].strip()
         logger.info("Successfully summarized a chunk.")
         return summary if summary else text_to_summarize
     except Exception as e:
@@ -187,20 +211,27 @@ async def _invoke_deepseek_summarizer(text_to_summarize: str) -> str:
         return text_to_summarize
 
 def validate_file(file: UploadFile, data: bytes):
-    if file.content_type != "application/pdf":
-        raise HTTPException(status_code=400, detail="Unsupported file type. Only PDF is allowed.")
+    allowed_types = [
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "image/jpeg",
+        "image/png"
+    ]
+    if file.content_type not in allowed_types:
+        raise HTTPException(status_code=400, detail=f"Unsupported file type. Allowed types are: {', '.join(allowed_types)}")
     if len(data) > settings.MAX_FILE_SIZE:
         raise HTTPException(status_code=400, detail=f"File size exceeds limit of {settings.MAX_FILE_SIZE / 1_000_000} MB.")
     if not data:
         raise HTTPException(status_code=400, detail="Uploaded file is empty.")
-    try:
-        with fitz.open(stream=data, filetype='pdf') as doc:
-            if doc.page_count == 0:
-                raise HTTPException(status_code=400, detail="PDF has no pages.")
-            if doc.page_count > settings.MAX_PAGES:
-                raise HTTPException(status_code=400, detail=f"PDF exceeds max pages ({settings.MAX_PAGES}).")
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid or corrupted PDF file.")
+    if file.content_type == "application/pdf":
+        try:
+            with fitz.open(stream=data, filetype='pdf') as doc:
+                if doc.page_count == 0:
+                    raise HTTPException(status_code=400, detail="PDF has no pages.")
+                if doc.page_count > settings.MAX_PAGES:
+                    raise HTTPException(status_code=400, detail=f"PDF exceeds max pages ({settings.MAX_PAGES}).")
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid or corrupted PDF file.")
 
 def clean_text(text: str) -> str:
     return ' '.join(text.replace('\x00', '').strip().split()) if text else ""
