@@ -17,7 +17,32 @@ const ClassCard = ({ classItem, showStudents }) => {
       console.error("Class ID is not defined");
       return;
     }
-    router.push(`dashboard/classes/${classItem.role}/${classid}`)
+    
+    // Debug the class item data
+    console.log("🎨 ClassCard Navigation Debug:");
+    console.log("  Class Item:", classItem);
+    console.log("  Color:", classItem.color);
+    console.log("  Color Type:", typeof classItem.color);
+    
+    // Ensure color is in proper hex format
+    let safeColor = classItem.color || '#6366f1';
+    
+    // If color is rgba, convert to hex
+    if (safeColor.startsWith('rgba') || safeColor.startsWith('rgb')) {
+      // For now, use a fallback - you can implement rgba to hex conversion if needed
+      safeColor = '#6366f1';
+      console.log("  Converted RGBA to fallback hex:", safeColor);
+    }
+    
+    const queryParams = new URLSearchParams({
+      name: classItem.name || '',
+      title: classItem.title || '',
+      instructor: classItem.instructor || '',
+      color: safeColor
+    });
+    
+    console.log("  Query Params:", queryParams.toString());
+    router.push(`dashboard/classes/${classItem.role}/${classid}?${queryParams.toString()}`)
   }
 
   return (
