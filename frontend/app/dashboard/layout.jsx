@@ -10,9 +10,11 @@ export default  function RootLayout({ children }) {
   
  const [showstudentform, setshowstudentform] = useState(false);
   const [user, setUser] = useState("");
-  const [dashboardResponse, setDashboardResponse] = useState(null); 
+  const [dashboardResponse, setDashboardResponse] = useState(null);
+  const [isLoading, setIsLoading] = useState(true); 
   useEffect(() => {
     const fetchdata = async () => {
+      setIsLoading(true);
       const token = document.cookie
         .split('; ')
         .find(row => row.startsWith('token='))
@@ -26,30 +28,48 @@ export default  function RootLayout({ children }) {
           console.error("Invalid token", e);
         }
       }
-    console.log("fecteching clasess...")
-      const res = await fetch("http://localhost:8000/api/dashboard", {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        }
-      });
-      if (res.status === 440) {
-        setshowstudentform(true);
-      }
-     
+      
+      console.log("Fetching classes...");
       try {
+        const res = await fetch("http://localhost:8000/api/dashboard", {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          }
+        });
+        
+        if (res.status === 440) {
+          setshowstudentform(true);
+        }
+       
         const data = await res.json();
         setDashboardResponse(data);
         console.log("Response -->", data);
       } catch (e) {
-        setDashboardResponse({ error: "Failed to parse response" });
+        console.error("Dashboard fetch error:", e);
+        setDashboardResponse({ error: "Failed to fetch dashboard data" });
+      } finally {
+        setIsLoading(false);
       }
     };
     fetchdata();
   }, []);
+  // Show loading screen while fetching dashboard data
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
+          <h2 className="text-xl font-semibold text-gray-700 mb-2">Loading Dashboard</h2>
+          <p className="text-gray-500">Fetching your classes and data...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <fetchdata.Provider value={{dashboardResponse,user,showstudentform,setshowstudentform}}>
+    <fetchdata.Provider value={{dashboardResponse,user,showstudentform,setshowstudentform,isLoading}}>
       <div>
       <SidebarProvider>
         <AppSidebar  />
