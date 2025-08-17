@@ -94,7 +94,7 @@ function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
 
-              <Collapsible className="group/collapsible">
+              <Collapsible key="teaching" className="group/collapsible">
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild className="h-13">
                     <SidebarMenuButton className="flex justify-between items-center data-[state=active]:text-purple-700 data-[state=active]:bg-purple-100 hover:bg-purple-100 hover:text-purple-700 ">
@@ -123,7 +123,7 @@ function AppSidebar() {
               </Collapsible>
 
 
-              <Collapsible className="group/collapsible">
+              <Collapsible key="admin" className="group/collapsible">
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild className="h-13">
                     <SidebarMenuButton className="flex justify-between items-center hover:bg-purple-100 hover:text-purple-700">
@@ -153,7 +153,7 @@ function AppSidebar() {
               </Collapsible>
 
 
-              <Collapsible className="group/collapsible">
+              <Collapsible key="learning" className="group/collapsible">
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild className="h-13">
                     <SidebarMenuButton className="flex justify-between items-center hover:bg-purple-100 hover:text-purple-700">

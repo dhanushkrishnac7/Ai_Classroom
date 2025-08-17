@@ -6,6 +6,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { useRouter } from "next/navigation"
 import React from "react"
 
 const gradientStyles = `
@@ -16,6 +17,8 @@ const gradientStyles = `
   }
 `;
 function stream({ classroomData, classInfo, loading }) {
+  const router = useRouter();
+
   if (loading) {
     return <div className="flex justify-center items-center h-64">Loading classroom data...</div>;
   }
@@ -23,26 +26,47 @@ function stream({ classroomData, classInfo, loading }) {
   const streamPosts = classroomData?.all_content || [];
   const { name: className, title: classTitle, instructor, color: classColor } = classInfo;
 
-  const safeColor = classColor && classColor !== 'null' && classColor !== '' ? classColor : '#14b8a6';
-  console.log("Class Color:", safeColor, "Original:", classColor);
 
-  // Alternative: Use a more vibrant fallback if no color
+  const handleCardClick = (post) => {
+    const postId = post.id || post.work_id;
+    const postType = post.type;
+    const postTitle = post.title || post.work_title;
+    const documents = post.documents || [];
+
+    console.log('Stream - Instructor being passed:', instructor);
+    console.log('Stream - ClassInfo:', classInfo);
+
+
+    const searchParams = new URLSearchParams({
+      type: postType,
+      title: postTitle,
+      documents: JSON.stringify(documents),
+      instructor: instructor || 'Instructor'
+    });
+
+
+    router.push(`/dashboard/classes/student/chat/${postId}?${searchParams.toString()}`);
+  };
+
+  const safeColor = classColor && classColor !== 'null' && classColor !== '' ? classColor : '#14b8a6';
+
   const finalColor = safeColor === '#14b8a6' ? '#6366f1' : safeColor;
 
-  // Create a more sophisticated gradient with multiple color stops
+
   const createGradient = (baseColor) => {
-    // Convert hex to RGB for manipulation
+
     const hex = baseColor.replace('#', '');
     const r = parseInt(hex.substr(0, 2), 16);
     const g = parseInt(hex.substr(2, 2), 16);
     const b = parseInt(hex.substr(4, 2), 16);
 
-    // Create lighter and darker variations
+
     const lighterColor = `rgb(${Math.min(255, r + 30)}, ${Math.min(255, g + 30)}, ${Math.min(255, b + 30)})`;
     const darkerColor = `rgb(${Math.max(0, r - 40)}, ${Math.max(0, g - 40)}, ${Math.max(0, b - 40)})`;
 
     return `linear-gradient(135deg, ${lighterColor} 0%, ${baseColor} 50%, ${darkerColor} 100%)`;
   };
+  console.log("&&&&", streamPosts);
   return (
     <>
       <style>{gradientStyles}</style>
@@ -83,7 +107,11 @@ function stream({ classroomData, classInfo, loading }) {
           <div className="lg:col-span-2 space-y-4">
             {streamPosts.length > 0 ? (
               streamPosts.map((post, index) => (
-                <Card key={post.id || index} className="hover:shadow-md transition-shadow">
+                <Card
+                  key={post.id || index}
+                  className="hover:shadow-md transition-shadow cursor-pointer hover:bg-gray-50"
+                  onClick={() => handleCardClick(post)}
+                >
                   <CardContent className="p-4">
                     <div className="flex items-start space-x-3">
                       <Avatar className="w-10 h-10">
@@ -93,22 +121,29 @@ function stream({ classroomData, classInfo, loading }) {
                       </Avatar>
                       <div className="flex-1">
                         <div className="flex flex-col space-y-1">
-                          <div className="flex items-center space-x-2">
+                          <div className="flex items-center space-x-2 flex-wrap">
                             <span className="font-medium">{instructor}</span>
                             <span className="text-sm text-gray-500">
-                              posted: {post.title}
+                              posted: {post.title || post.work_title}
                             </span>
                             <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
                               {post.type}
                             </span>
+                            {post.type === 'work' && post.due_date && (
+                              <span className="text-xs bg-red-500 text-white px-2 py-1 rounded font-medium">
+                                Due: {new Date(post.due_date).toLocaleDateString('en-US', {
+                                  month: 'short',
+                                  day: 'numeric'
+                                })}
+                              </span>
+                            )}
                           </div>
-                          {post.context && (
-                            <p className="text-sm text-gray-600 mt-1">{post.context}</p>
+                          {(post.context || post.work_description) && (
+                            <p className="text-sm text-gray-600 mt-1">{post.context || post.work_description}</p>
                           )}
-
                         </div>
                         <p className="text-sm text-gray-500 mt-2">
-                          {new Date(post.uploaded_at).toLocaleDateString('en-US', {
+                          {new Date(post.uploaded_at || post.created_at).toLocaleDateString('en-US', {
                             year: 'numeric',
                             month: 'short',
                             day: 'numeric',
@@ -117,7 +152,14 @@ function stream({ classroomData, classInfo, loading }) {
                           })}
                         </p>
                       </div>
-                      <Button variant="ghost" size="sm">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation(); // Prevent card click when clicking menu
+                          // Add menu functionality here if needed
+                        }}
+                      >
                         <MoreVertical className="w-4 h-4" />
                       </Button>
                     </div>
