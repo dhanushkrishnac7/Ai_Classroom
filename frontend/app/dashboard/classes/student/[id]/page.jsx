@@ -147,7 +147,6 @@ function Page() {
 
     fetchClassroomData();
   }, [id]);
-
   if (!dashboardResponse) {
     return <div className="flex justify-center items-center h-64">Loading...</div>;
   }
