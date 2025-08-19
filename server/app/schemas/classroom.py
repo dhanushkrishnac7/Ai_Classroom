@@ -25,6 +25,7 @@ class VideoUploaded(BaseModel):
     uploaded_at: Any = Field(..., alias="uploadedAt")
     uploaded_by: str = Field(..., alias="uploadedBy")
     classroom_id: int = Field(..., alias="classroomId")
+    status: str = Field("processing", alias="status")
 
     class Config:
         populate_by_name = True

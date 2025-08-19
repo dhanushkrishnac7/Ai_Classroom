@@ -35,6 +35,11 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: Optional[str] = None
     GEMINI_MODEL_NAME: Optional[str] = None
 
+    AZURE_WHISPER_ENDPOINT: Optional[str] = None
+    AZURE_WHISPER_API_KEY: Optional[str] = None
+    AZURE_WHISPER_DEPLOYMENT_NAME: Optional[str] = None
+    AZURE_WHISPER_API_VERSION: Optional[str] = None
+
     # Configuration
     AZURE_STORAGE_CONTAINER_NAME: str = "diagram-images"
     AZURE_DOCS_CONTAINER_NAME: str = "uploaded-documents"
@@ -42,8 +47,8 @@ class Settings(BaseSettings):
     MAX_FILE_SIZE: int = 50_000_000
     MAX_PAGES: int = 500
     BATCH_SIZE: int = 2
-    MAX_CHUNK_SIZE: int = 1500
-    CHUNK_OVERLAP: int = 150
+    MAX_CHUNK_SIZE: int = 800
+    CHUNK_OVERLAP: int = 100
     EMBEDDING_BATCH_SIZE: int = 16
     DIAGRAM_MAX_WIDTH: int = 1024
     DIAGRAM_MAX_HEIGHT: int = 1024
@@ -52,7 +57,7 @@ class Settings(BaseSettings):
     # Rate Limiting (Requests Per Minute)
     OCR_RPM: int = 50
     EMBEDDING_RPM: int = 250
-    GPT4O_RPM: int = 40
+    GPT4O_RPM: int = 30
     DEEPSEEK_RPM: int = 180
     
     class Config:
