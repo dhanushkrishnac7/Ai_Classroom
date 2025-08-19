@@ -26,6 +26,19 @@ class ClientManager:
         if settings.GEMINI_API_KEY:
             genai.configure(api_key=settings.GEMINI_API_KEY)
 
+    async def cleanup(self):
+        """Clean up all HTTP clients to prevent unclosed session warnings."""
+        try:
+            if hasattr(self._deepseek_llm, 'aclose'):
+                await self._deepseek_llm.aclose()
+            if hasattr(self._gpt4o_chat_llm, 'aclose'):
+                await self._gpt4o_chat_llm.aclose()
+            if hasattr(self._embeddings, 'aclose'):
+                await self._embeddings.aclose()
+        except Exception as e:
+            # Ignore cleanup errors
+            pass
+
     def get_supabase_client(self) -> Client:
         """Creates and returns a new Supabase client."""
         return create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)

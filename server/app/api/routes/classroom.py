@@ -1,8 +1,9 @@
 import uuid
 import logging
 import asyncio
-from typing import Optional, List
+from typing import Optional, List, Union
 from datetime import datetime
+import yt_dlp
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status
 from fastapi.responses import JSONResponse
@@ -44,13 +45,16 @@ async def add_blog_to_classroom(
     token: dict = Depends(verify_token),
     title: str = Form(...),
     context: str = Form(...),
-    files: Optional[List[UploadFile]] = File(None)
+    files: Optional[List[Union[UploadFile, str]]] = File(None),
+    youtube_url: Optional[str] = Form(None)
 ):
     user_id = token["sub"]
     if not await _verify_admin_or_owner(classroom_id, user_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only admins or the owner can add blogs.")
-
-    if files and len(files) > 3:
+    
+    actual_files = [f for f in files if isinstance(f, UploadFile)] if files else []
+        
+    if actual_files and len(actual_files) > 3:
         raise HTTPException(status_code=400, detail="You can upload a maximum of 3 files.")
 
     supabase = client_manager.get_supabase_client()
@@ -71,8 +75,8 @@ async def add_blog_to_classroom(
         uploaded_documents_data = []
         uploaded_videos_data = []
 
-        if files:
-            for file in files:
+        if actual_files:
+            for file in actual_files:
                 if file.filename:
                     file_id = str(uuid.uuid4())
                     data = await file.read()
@@ -82,11 +86,17 @@ async def add_blog_to_classroom(
                         video_url = await upload_file_to_blob(data, settings.AZURE_VIDEOS_CONTAINER_NAME, f"{file_id}_{file.filename}")
                         video_record = {
                             'video_id': file_id, 'video_name': file.filename, 'video_url': video_url,
-                            'uploaded_by': user_id, 'classroom_id': classroom_id, 'origin_blog': blog_id
+                            'uploaded_by': user_id, 'classroom_id': classroom_id, 'origin_blog': blog_id, 
+                            'origin_work': None, 'status': 'processing'
                         }
                         video_insert_res = await asyncio.to_thread(supabase.table('videos_uploaded').insert(video_record).execute)
                         if video_insert_res.data:
                             uploaded_videos_data.append(video_insert_res.data[0])
+                            task_data = {
+                                "doc_id": file_id, "user_id": user_id, "classroom_id": classroom_id,
+                                "file_data": data, "filename": file.filename, "content_type": content_type, "task_type": "video"
+                            }
+                            await document_queue.add_to_queue(task_data)
                     else:
                         validate_file(file, data)
                         doc_url = await upload_file_to_blob(data, settings.AZURE_DOCS_CONTAINER_NAME, f"{file_id}_{file.filename}")
@@ -100,9 +110,29 @@ async def add_blog_to_classroom(
                             uploaded_documents_data.append(doc_insert_res.data[0])
                             task_data = {
                                 "doc_id": file_id, "user_id": user_id, "classroom_id": classroom_id,
-                                "file_data": data, "filename": file.filename, "content_type": content_type
+                                "file_data": data, "filename": file.filename, "content_type": content_type, "task_type": "document"
                             }
                             await document_queue.add_to_queue(task_data)
+
+        if youtube_url:
+            video_id = str(uuid.uuid4())
+            with yt_dlp.YoutubeDL({'quiet': True, 'no_warnings': True}) as ydl:
+                info = ydl.extract_info(youtube_url, download=False)
+                video_title = info.get('title', 'YouTube Video')
+
+            video_record = {
+                'video_id': video_id, 'video_name': video_title, 'video_url': youtube_url,
+                'uploaded_by': user_id, 'classroom_id': classroom_id, 'origin_blog': blog_id, 
+                'origin_work': None, 'status': 'processing'
+            }
+            video_insert_res = await asyncio.to_thread(supabase.table('videos_uploaded').insert(video_record).execute)
+            if video_insert_res.data:
+                uploaded_videos_data.append(video_insert_res.data[0])
+                task_data = {
+                    "doc_id": video_id, "user_id": user_id, "classroom_id": classroom_id,
+                    "youtube_url": youtube_url, "task_type": "youtube"
+                }
+                await document_queue.add_to_queue(task_data)
 
         new_blog['documents_uploaded'] = [DocumentsUploaded.model_validate(doc) for doc in uploaded_documents_data]
         new_blog['videos_uploaded'] = [VideoUploaded.model_validate(vid) for vid in uploaded_videos_data]
@@ -121,13 +151,16 @@ async def assign_work_to_classroom(
     work_title: str = Form(...),
     work_description: str = Form(...),
     due_date: str = Form(...),
-    files: Optional[List[UploadFile]] = File(None)
+    files: Optional[List[Union[UploadFile, str]]] = File(None),
+    youtube_url: Optional[str] = Form(None)
 ):
     user_id = token["sub"]
     if not await _verify_admin_or_owner(classroom_id, user_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only admins or the owner can assign work.")
 
-    if files and len(files) > 3:
+    actual_files = [f for f in files if isinstance(f, UploadFile)] if files else []
+
+    if actual_files and len(actual_files) > 3:
         raise HTTPException(status_code=400, detail="You can upload a maximum of 3 files.")
 
     supabase = client_manager.get_supabase_client()
@@ -149,8 +182,8 @@ async def assign_work_to_classroom(
         uploaded_documents_data = []
         uploaded_videos_data = []
 
-        if files:
-            for file in files:
+        if actual_files:
+            for file in actual_files:
                 if file.filename:
                     file_id = str(uuid.uuid4())
                     data = await file.read()
@@ -160,11 +193,17 @@ async def assign_work_to_classroom(
                         video_url = await upload_file_to_blob(data, settings.AZURE_VIDEOS_CONTAINER_NAME, f"{file_id}_{file.filename}")
                         video_record = {
                             'video_id': file_id, 'video_name': file.filename, 'video_url': video_url,
-                            'uploaded_by': user_id, 'classroom_id': classroom_id, 'origin_work': work_id
+                            'uploaded_by': user_id, 'classroom_id': classroom_id, 'origin_work': work_id, 
+                            'origin_blog': None, 'status': 'processing'
                         }
                         video_insert_res = await asyncio.to_thread(supabase.table('videos_uploaded').insert(video_record).execute)
                         if video_insert_res.data:
                             uploaded_videos_data.append(video_insert_res.data[0])
+                            task_data = {
+                                "doc_id": file_id, "user_id": user_id, "classroom_id": classroom_id,
+                                "file_data": data, "filename": file.filename, "content_type": content_type, "task_type": "video"
+                            }
+                            await document_queue.add_to_queue(task_data)
                     else:
                         validate_file(file, data)
                         doc_url = await upload_file_to_blob(data, settings.AZURE_DOCS_CONTAINER_NAME, f"{file_id}_{file.filename}")
@@ -178,9 +217,29 @@ async def assign_work_to_classroom(
                             uploaded_documents_data.append(doc_insert_res.data[0])
                             task_data = {
                                 "doc_id": file_id, "user_id": user_id, "classroom_id": classroom_id,
-                                "file_data": data, "filename": file.filename, "content_type": content_type
+                                "file_data": data, "filename": file.filename, "content_type": content_type, "task_type": "document"
                             }
                             await document_queue.add_to_queue(task_data)
+
+        if youtube_url:
+            video_id = str(uuid.uuid4())
+            with yt_dlp.YoutubeDL({'quiet': True, 'no_warnings': True}) as ydl:
+                info = ydl.extract_info(youtube_url, download=False)
+                video_title = info.get('title', 'YouTube Video')
+
+            video_record = {
+                'video_id': video_id, 'video_name': video_title, 'video_url': youtube_url,
+                'uploaded_by': user_id, 'classroom_id': classroom_id, 'origin_work': work_id, 
+                'origin_blog': None, 'status': 'processing'
+            }
+            video_insert_res = await asyncio.to_thread(supabase.table('videos_uploaded').insert(video_record).execute)
+            if video_insert_res.data:
+                uploaded_videos_data.append(video_insert_res.data[0])
+                task_data = {
+                    "doc_id": video_id, "user_id": user_id, "classroom_id": classroom_id,
+                    "youtube_url": youtube_url, "task_type": "youtube"
+                }
+                await document_queue.add_to_queue(task_data)
 
         new_work['documents_uploaded'] = [DocumentsUploaded.model_validate(doc) for doc in uploaded_documents_data]
         new_work['videos_uploaded'] = [VideoUploaded.model_validate(vid) for vid in uploaded_videos_data]

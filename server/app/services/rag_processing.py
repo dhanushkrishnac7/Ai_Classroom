@@ -4,20 +4,23 @@ import asyncio
 import base64
 import io
 import time
+import os
+import tempfile
+import docx
+import cv2
+import numpy as np
+import openai
+import yt_dlp
 from PIL import Image
 from typing import List, Tuple, Dict, Optional
 from fastapi import HTTPException, UploadFile
-import docx
+from moviepy.editor import VideoFileClip
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.messages import SystemMessage, HumanMessage
 
 from app.core.config import get_settings
-from app.core.clients import (
-    client_manager,
-    blob_service_client, embeddings_client,
-    deepseek_llm, gpt4o_chat_llm
-)
+from app.core.clients import client_manager
 from app.services.rate_limiter import rate_limiter
 
 # Configure logging
@@ -29,14 +32,14 @@ settings = get_settings()
 logger = logging.getLogger(__name__)
 
 # --- Constants ---
-DEEPSEEK_SUMMARY_PROMPT = "Summarize the following technical text. Focus on retaining all key technical terms, specifications, data points, and core concepts. Be concise and remove any filler content."
+DEEPSEEK_SUMMARY_PROMPT = "Compress the following text into key points only. Remove redundant information, filler words, and repetitive content. Focus on essential technical information and main concepts. Maximum 50% of original length:"
 DIAGRAM_DESCRIPTION_SYSTEM_PROMPT = "You are a specialist in technical and systems analysis. Analyze the provided image, which is a technical diagram. Your description should be detailed and structured. Use markdown lists to break down the components. Identify all visible elements, including shapes, icons, labels, and text. Describe the connections, arrows, and flows between components to explain their relationships and interactions. Infer the overall purpose or function of the system depicted in the diagram based on its structure."
 
 # --- Helper Functions ---
 async def upload_file_to_blob(file_data: bytes, container_name: str, blob_name: str) -> str:
     """Uploads a file to the specified Azure Blob Storage container."""
     try:
-        blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_name)
+        blob_client = client_manager.blob_service_client.get_blob_client(container=container_name, blob=blob_name)
         await blob_client.upload_blob(file_data, overwrite=True)
         logger.info(f"Successfully uploaded {blob_name} to {container_name}")
         return blob_client.url
@@ -44,19 +47,305 @@ async def upload_file_to_blob(file_data: bytes, container_name: str, blob_name: 
         logger.error(f"Failed to upload {blob_name} to {container_name}: {e}")
         raise HTTPException(status_code=500, detail="Failed to upload file to cloud storage.")
 
+def clean_text(text: str) -> str:
+    return ' '.join(text.replace('\x00', '').strip().split()) if text else ""
+
+def chunk_text(text: str) -> List[str]:
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=settings.MAX_CHUNK_SIZE,
+        chunk_overlap=settings.CHUNK_OVERLAP,
+        length_function=len
+    )
+    chunks = splitter.split_text(clean_text(text))
+    return [c for c in chunks if len(clean_text(c)) >= 10]
+
+async def _invoke_deepseek_summarizer(text: str) -> str:
+    if not client_manager.deepseek_llm:
+        return text
+    messages = [SystemMessage(content=DEEPSEEK_SUMMARY_PROMPT), HumanMessage(content=text)]
+    response = await client_manager.deepseek_llm.ainvoke(messages)
+    summary = response.content.split('</think>')[-1].strip()
+    return summary if summary else text
+
+async def generate_embeddings_safely(chunks: List[str]) -> List[List[float]]:
+    if not chunks: return []
+    return await client_manager.embeddings.aembed_documents(chunks)
+
+# --- Video Processing ---
+
+def compress_frame(frame: np.ndarray, max_width: int = 512, max_height: int = 512, quality: int = 60) -> bytes:
+    """Compress frame to reduce token usage for GPT-4o vision."""
+    height, width = frame.shape[:2]
+    
+    if width > max_width or height > max_height:
+        scale = min(max_width / width, max_height / height)
+        new_width = int(width * scale)
+        new_height = int(height * scale)
+        frame = cv2.resize(frame, (new_width, new_height), interpolation=cv2.INTER_AREA)
+    
+    encode_params = [cv2.IMWRITE_JPEG_QUALITY, quality]
+    _, buffer = cv2.imencode('.jpg', frame, encode_params)
+    
+    return buffer.tobytes()
+
+async def transcribe_audio(video_path: str) -> List[Dict]:
+    logger.info("Extracting audio and transcribing...")
+    start_time = time.time()
+    
+    try:
+        if not all([settings.AZURE_WHISPER_ENDPOINT, settings.AZURE_WHISPER_API_KEY, settings.AZURE_WHISPER_API_VERSION, settings.AZURE_WHISPER_DEPLOYMENT_NAME]):
+            logger.error("Azure Whisper credentials not found or incomplete in .env file.")
+            return []
+        
+        audio = VideoFileClip(video_path).audio
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as temp_audio_file:
+            audio.write_audiofile(
+                temp_audio_file.name, 
+                codec="mp3", 
+                bitrate="64k",
+                verbose=False, 
+                logger=None
+            )
+            temp_audio_path = temp_audio_file.name
+        
+        azure_client = openai.AzureOpenAI(
+            azure_endpoint=settings.AZURE_WHISPER_ENDPOINT,
+            api_key=settings.AZURE_WHISPER_API_KEY,
+            api_version=settings.AZURE_WHISPER_API_VERSION
+        )
+
+        with open(temp_audio_path, "rb") as audio_file:
+            transcript = await asyncio.to_thread(
+                azure_client.audio.transcriptions.create,
+                model=settings.AZURE_WHISPER_DEPLOYMENT_NAME,
+                file=audio_file
+            )
+        os.remove(temp_audio_path)
+        
+        full_text = clean_text(transcript.text)
+        summarized_text = await _invoke_deepseek_summarizer(full_text)
+        chunks = chunk_text(summarized_text)
+        
+        duration = audio.duration
+        result = [{"type": "transcript", "timestamp": int((i / len(chunks)) * duration * 1000), "content": chunk} for i, chunk in enumerate(chunks)]
+        
+        return result
+    except Exception as e:
+        logger.error(f"Error during audio transcription: {e}")
+        return []
+
+async def extract_key_frames(video_path: str) -> List[Tuple[int, bytes]]:
+    logger.info("Extracting key-frames...")
+    key_frames = []
+    cap = cv2.VideoCapture(video_path)
+    
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    
+    interval_seconds = 20
+    frame_interval = int(fps * interval_seconds) if fps > 0 else 300
+    
+    frame_positions = list(range(0, total_frames, frame_interval))
+    if 0 not in frame_positions:
+        frame_positions.insert(0, 0)
+    if total_frames - 1 not in frame_positions:
+        frame_positions.append(total_frames - 1)
+    
+    prev_gray = None
+    difference_threshold = 30.0
+    
+    for frame_pos in frame_positions:
+        cap.set(cv2.CAP_PROP_POS_FRAMES, frame_pos)
+        ret, frame = cap.read()
+        
+        if ret:
+            timestamp = cap.get(cv2.CAP_PROP_POS_MSEC)
+            gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            
+            if prev_gray is None:
+                compressed_frame = compress_frame(frame)
+                key_frames.append((int(timestamp), compressed_frame))
+                prev_gray = gray_frame
+                continue
+            
+            diff = cv2.absdiff(gray_frame, prev_gray)
+            diff_percentage = (np.mean(diff) / 255.0) * 100
+            
+            if diff_percentage >= difference_threshold:
+                compressed_frame = compress_frame(frame)
+                key_frames.append((int(timestamp), compressed_frame))
+            
+            prev_gray = gray_frame
+
+    cap.release()
+    return key_frames
+
+async def ocr_key_frame(image_data: bytes) -> str:
+    try:
+        poller = await client_manager.ocr.begin_analyze_document("prebuilt-read", image_data)
+        result = await poller.result()
+        return "\n".join([line.content for page in result.pages for line in page.lines])
+    except Exception as e:
+        logger.error(f"Error during OCR: {e}")
+        return ""
+
+async def _invoke_gpt4o_diagram(image_data: bytes, prompt: str) -> str:
+    if not client_manager.gpt4o_chat_llm:
+        return ""
+    
+    image_base64 = base64.b64encode(image_data).decode('utf-8')
+    message = HumanMessage(
+        content=[
+            {"type": "text", "text": prompt},
+            {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_base64}"}}
+        ]
+    )
+    response = await client_manager.gpt4o_chat_llm.ainvoke([message])
+    return response.content.strip() if response.content else ""
+
+async def describe_diagram(image_data: bytes) -> str:
+    return await _invoke_gpt4o_diagram(image_data, "Describe the technical content of this diagram, including shapes, labels, and relationships.")
+
+async def embed_and_store_video_chunks(chunks: List[Dict], video_id: str, user_id: str, classroom_id: int, filename: str):
+    if not chunks:
+        return
+
+    contents = [chunk['content'] for chunk in chunks]
+    embeddings = await generate_embeddings_safely(contents)
+    
+    supabase = client_manager.get_supabase_client()
+
+    # Create a corresponding document record for the video
+    doc_record = {
+        'document_id': video_id, 'uploaded_by': user_id, 'document_name': filename,
+        'document_url': f"video://{video_id}", 'classroom_id': classroom_id,
+        'is_class_context': True, 'status': 'completed', 'total_chunks_in_doc': len(chunks)
+    }
+    await asyncio.to_thread(supabase.table('documents_uploaded').insert(doc_record).execute)
+
+    rows = []
+    for i, chunk in enumerate(chunks):
+        metadata = {
+            "chunk_type": chunk['type'],
+            "start_time_ms": chunk['timestamp'],
+            "source": filename
+        }
+        rows.append({
+            'document_id': video_id,
+            'user_id': user_id,
+            'chunk_index': i,
+            'content': chunk['content'],
+            'embedding': embeddings[i],
+            'metadata': metadata,
+            'classroom_id': classroom_id
+        })
+        
+    try:
+        supabase.table('document_chunks').insert(rows).execute()
+    except Exception as e:
+        logger.error(f"Failed to store video chunks: {e}")
+
+async def process_video(video_id: str, user_id: str, classroom_id: int, file_data: bytes, filename: str):
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as temp_video_file:
+        temp_video_file.write(file_data)
+        temp_video_path = temp_video_file.name
+
+    try:
+        transcript_task = asyncio.create_task(transcribe_audio(temp_video_path))
+        frames_task = asyncio.create_task(extract_key_frames(temp_video_path))
+        
+        transcript_chunks, key_frames = await asyncio.gather(transcript_task, frames_task)
+        
+        frame_chunks = []
+        if key_frames:
+            frame_tasks = []
+            for timestamp, frame_image in key_frames:
+                ocr_task = asyncio.create_task(ocr_key_frame(frame_image))
+                diagram_task = asyncio.create_task(describe_diagram(frame_image))
+                frame_tasks.append((timestamp, ocr_task, diagram_task))
+            
+            for timestamp, ocr_task, diagram_task in frame_tasks:
+                ocr_text, diagram_desc = await asyncio.gather(ocr_task, diagram_task)
+                if ocr_text:
+                    frame_chunks.append({"type": "ocr_frame", "timestamp": timestamp, "content": ocr_text})
+                if diagram_desc:
+                    frame_chunks.append({"type": "diagram", "timestamp": timestamp, "content": diagram_desc})
+        
+        all_content = transcript_chunks + frame_chunks
+        all_content.sort(key=lambda x: x['timestamp'])
+        
+        await embed_and_store_video_chunks(all_content, video_id, user_id, classroom_id, filename)
+        
+        supabase = client_manager.get_supabase_client()
+        await asyncio.to_thread(
+            supabase.table('videos_uploaded').update({'status': 'completed'}).eq('video_id', video_id).execute
+        )
+        logger.info(f"Successfully processed and stored video {video_id}")
+
+    except Exception as e:
+        supabase = client_manager.get_supabase_client()
+        await asyncio.to_thread(
+            supabase.table('videos_uploaded').update({'status': 'failed'}).eq('video_id', video_id).execute
+        )
+        logger.error(f"Failed to process video {video_id}: {e}")
+    finally:
+        os.remove(temp_video_path)
+        
+async def process_youtube_video(youtube_url: str, video_id: str, user_id: str, classroom_id: int):
+    temp_video_path = None
+    try:
+        temp_dir = tempfile.mkdtemp()
+        ydl_opts = {
+            'format': 'best[ext=mp4][height<=720]/best[ext=mp4]/mp4/best',
+            'outtmpl': os.path.join(temp_dir, '%(title)s.%(ext)s'),
+            'quiet': True,
+            'no_warnings': True,
+        }
+
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(youtube_url, download=True)
+            video_title = info.get('title', 'Unknown Video')
+
+        downloaded_files = [f for f in os.listdir(temp_dir) if f.endswith(('.mp4', '.webm', '.mkv'))]
+        if not downloaded_files:
+            return
+            
+        temp_video_path = os.path.join(temp_dir, downloaded_files[0])
+        with open(temp_video_path, "rb") as f:
+            file_data = f.read()
+        
+        await process_video(video_id, user_id, classroom_id, file_data, video_title)
+    
+    finally:
+        if temp_video_path and os.path.exists(temp_video_path):
+            os.remove(temp_video_path)
+        if 'temp_dir' in locals() and os.path.exists(temp_dir):
+            import shutil
+            shutil.rmtree(temp_dir)
+
+
 # --- Core RAG Processing Functions ---
 async def process_document_background(
     doc_id: str,
     user_id: str,
     classroom_id: int,
-    file_data: bytes,
-    filename: str,
-    content_type: str
+    file_data: bytes = None,
+    filename: str = None,
+    content_type: str = None,
+    youtube_url: str = None,
+    task_type: str = "document",
+    **kwargs
 ):
     """This function runs in the background to process the document."""
     supabase = client_manager.get_supabase_client()
     try:
-        if content_type == "application/pdf":
+        if task_type == "video":
+             await process_video(doc_id, user_id, classroom_id, file_data, filename)
+        
+        elif task_type == "youtube":
+            await process_youtube_video(youtube_url, doc_id, user_id, classroom_id)
+
+        elif content_type == "application/pdf":
             pages_content, total_pages = await extract_text_from_pdf(file_data)
             diagram_page_indices = await identify_diagram_pages(file_data)
             diagram_data = await process_diagrams(file_data, diagram_page_indices, doc_id)
@@ -64,39 +353,44 @@ async def process_document_background(
             pages_content, total_pages = await extract_text_from_docx(file_data)
             diagram_data = {}
         elif content_type.startswith("image/"):
-            description = await _invoke_gpt4o_diagram(file_data, "Describe this image in detail.", f"Image description ({filename})")
+            description = await _invoke_gpt4o_diagram(file_data, "Describe this image in detail.")
             pages_content = [description]
             total_pages = 1
             diagram_data = {}
         else:
             raise ValueError(f"Unsupported content type for processing: {content_type}")
 
-        if not any(pages_content) and not diagram_data:
-            raise ValueError("No text or diagrams could be extracted from the document.")
-        
-        _, chunks_added = await process_and_store_chunks(
-            pages_content, diagram_data, filename, total_pages, doc_id, user_id, classroom_id
-        )
-        update_record = {
-            'total_chunks_in_doc': chunks_added,
-            'total_pages': total_pages,
-            'status': 'completed'
-        }
-        await asyncio.to_thread(
-            supabase.table('documents_uploaded').update(update_record).eq('document_id', doc_id).execute
-        )
+        if task_type == "document":
+            if not any(pages_content) and not diagram_data:
+                raise ValueError("No text or diagrams could be extracted from the document.")
+            
+            _, chunks_added = await process_and_store_chunks(
+                pages_content, diagram_data, filename, total_pages, doc_id, user_id, classroom_id
+            )
+            update_record = {
+                'total_chunks_in_doc': chunks_added,
+                'total_pages': total_pages,
+                'status': 'completed'
+            }
+            await asyncio.to_thread(
+                supabase.table('documents_uploaded').update(update_record).eq('document_id', doc_id).execute
+            )
         logger.info(f"Doc '{doc_id}': Successfully completed background processing.")
     except Exception as e:
         logger.error(f"Doc '{doc_id}': Background processing failed: {e}", exc_info=True)
-        await asyncio.to_thread(
-            supabase.table('documents_uploaded').update({'status': 'failed'}).eq('document_id', doc_id).execute
-        )
+        if task_type == "document":
+            await asyncio.to_thread(
+                supabase.table('documents_uploaded').update({'status': 'failed'}).eq('document_id', doc_id).execute
+            )
+        elif task_type in ["video", "youtube"]:
+            await asyncio.to_thread(
+                supabase.table('videos_uploaded').update({'status': 'failed'}).eq('video_id', doc_id).execute
+            )
 
 async def extract_text_from_docx(file_data: bytes) -> Tuple[List[str], int]:
     """Extracts text from a .docx file."""
     document = docx.Document(io.BytesIO(file_data))
     text = "\n".join([para.text for para in document.paragraphs])
-    # For simplicity, we'll treat the whole docx as a single "page"
     return [text], 1
 
 
@@ -105,8 +399,6 @@ async def extract_text_from_pdf(file_data: bytes) -> Tuple[List[str], int]:
         total_pages = doc.page_count
         batch_size = 2
         page_batches = [(i, min(i + batch_size - 1, total_pages - 1)) for i in range(0, total_pages, batch_size)]
-        
-        logger.info(f"OCR: Processing {total_pages} pages in {len(page_batches)} batches.")
         
         all_page_texts = [""] * total_pages
         
@@ -130,7 +422,6 @@ async def extract_text_from_pdf(file_data: bytes) -> Tuple[List[str], int]:
         tasks = [process_batch(start, end) for start, end in page_batches]
         await asyncio.gather(*tasks, return_exceptions=True)
 
-    logger.info(f"Completed OCR for {total_pages} pages.")
     return all_page_texts, total_pages
 
 async def process_diagrams(file_data: bytes, diagram_pages: List[int], document_id: str) -> Dict[int, Tuple[str, str]]:
@@ -143,9 +434,9 @@ async def process_diagrams(file_data: bytes, diagram_pages: List[int], document_
             if not compressed_image_data:
                 return page_idx, None
 
-            image_url = await upload_image_to_blob(compressed_image_data, document_id, page_idx + 1)
+            image_url = await upload_image_to_blob(compressed_image_data, settings.AZURE_STORAGE_CONTAINER_NAME, f"{document_id}/diagram_page_{page_idx+1}.jpeg")
             prompt = f"This diagram is from page {page_idx+1}. Provide a detailed description."
-            description = await _invoke_gpt4o_diagram(compressed_image_data, prompt, f"Diagram description (Page {page_idx+1})")
+            description = await _invoke_gpt4o_diagram(compressed_image_data, prompt)
             return page_idx, (description, image_url)
         except Exception as e:
             logger.error(f"Failed to process diagram on page {page_idx+1}: {e}")
@@ -176,9 +467,6 @@ async def process_and_store_chunks(pages_content, diagram_data, filename, total_
     if not all_chunks_to_process:
         raise HTTPException(status_code=400, detail="Document content is too sparse to be processed.")
     
-    logger.info(f"Doc '{doc_id}': Document split into {len(all_chunks_to_process)} chunks.")
-
-    # Summarization, Embedding, and Storage
     summarized_contents = await asyncio.gather(*[_invoke_deepseek_summarizer(item['content']) for item in all_chunks_to_process])
     for i, item in enumerate(all_chunks_to_process):
         item['content'] = summarized_contents[i]
@@ -191,31 +479,28 @@ async def process_and_store_chunks(pages_content, diagram_data, filename, total_
 
     return all_chunks_to_process, chunks_added
 
-# --- Helper Functions ---
-async def _invoke_deepseek_summarizer(text_to_summarize: str) -> str:
-    if not deepseek_llm:
-        logger.warning("DeepSeek summarizer not configured. Summarization will be skipped.")
-        return text_to_summarize
-
-    await rate_limiter.check_and_wait('deepseek')
-    logger.info("Starting summarization for a chunk.")
-    messages = [SystemMessage(content=DEEPSEEK_SUMMARY_PROMPT), HumanMessage(content=text_to_summarize)]
+async def store_chunks_in_supabase(chunk_data: List[Dict], doc_id: str, user_id: str, classroom_id: int) -> int:
+    if not chunk_data: return 0
+    rows = [{
+        'document_id': doc_id, 'user_id': user_id, 'chunk_index': i,
+        'content': d['content'], 'embedding': d['embedding'], 'metadata': d['metadata'],
+        'classroom_id': classroom_id
+    } for i, d in enumerate(chunk_data)]
     try:
-        response = await deepseek_llm.ainvoke(messages)
-        # Strip the <think> block from the response
-        summary = response.content.split('</think>')[-1].strip()
-        logger.info("Successfully summarized a chunk.")
-        return summary if summary else text_to_summarize
+        supabase = client_manager.get_supabase_client()
+        res = await asyncio.to_thread(supabase.table('document_chunks').insert(rows).execute)
+        return len(res.data)
     except Exception as e:
-        logger.error(f"Error calling DeepSeek API, returning original text: {e}")
-        return text_to_summarize
+        logger.error(f"Supabase chunk insert failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to store document chunks in the database.")
 
 def validate_file(file: UploadFile, data: bytes):
     allowed_types = [
         "application/pdf",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         "image/jpeg",
-        "image/png"
+        "image/png",
+        "video/mp4",
     ]
     if file.content_type not in allowed_types:
         raise HTTPException(status_code=400, detail=f"Unsupported file type. Allowed types are: {', '.join(allowed_types)}")
@@ -233,70 +518,6 @@ def validate_file(file: UploadFile, data: bytes):
         except Exception:
             raise HTTPException(status_code=400, detail="Invalid or corrupted PDF file.")
 
-def clean_text(text: str) -> str:
-    return ' '.join(text.replace('\x00', '').strip().split()) if text else ""
-
-def chunk_text(text: str) -> List[str]:
-    splitter = RecursiveCharacterTextSplitter(
-        chunk_size=settings.MAX_CHUNK_SIZE,
-        chunk_overlap=settings.CHUNK_OVERLAP,
-        length_function=len
-    )
-    chunks = splitter.split_text(clean_text(text))
-    return [c for c in chunks if len(clean_text(c)) >= 10]
-
-async def generate_embeddings_safely(chunks: List[str]) -> List[List[float]]:
-    if not chunks: return []
-    embeddings_list = []
-    for i in range(0, len(chunks), settings.EMBEDDING_BATCH_SIZE):
-        batch = chunks[i:i + settings.EMBEDDING_BATCH_SIZE]
-        await rate_limiter.check_and_wait('embedding')
-        try:
-            batch_embeddings = await embeddings_client.aembed_documents(batch)
-            embeddings_list.extend(batch_embeddings)
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to generate embeddings: {e}")
-    return embeddings_list
-
-async def store_chunks_in_supabase(chunk_data: List[Dict], doc_id: str, user_id: str, classroom_id: int) -> int:
-    if not chunk_data: return 0
-    rows = [{
-        'document_id': doc_id, 'user_id': user_id, 'chunk_index': i,
-        'content': d['content'], 'embedding': d['embedding'], 'metadata': d['metadata'],
-        'classroom_id': classroom_id
-    } for i, d in enumerate(chunk_data)]
-    try:
-        supabase = client_manager.get_supabase_client()
-        res = await asyncio.to_thread(supabase.table('document_chunks').insert(rows).execute)
-        return len(res.data)
-    except Exception as e:
-        logger.error(f"Supabase chunk insert failed: {e}")
-        raise HTTPException(status_code=500, detail="Failed to store document chunks in the database.")
-
-async def _invoke_gpt4o_diagram(image_data: bytes, prompt: str, task_name: str) -> str:
-    if not gpt4o_chat_llm:
-        logger.warning("GPT-4o client not available. Skipping diagram description.")
-        return "Diagram description not available."
-
-    await rate_limiter.check_and_wait('gpt4o')
-    logger.info(f"Invoking GPT-4o for diagram: {task_name}")
-    image_b64 = base64.b64encode(image_data).decode("utf-8")
-    messages = [
-        SystemMessage(content=DIAGRAM_DESCRIPTION_SYSTEM_PROMPT),
-        HumanMessage(content=[
-            {"type": "text", "text": prompt},
-            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"}}
-        ])
-    ]
-    try:
-        response = await gpt4o_chat_llm.ainvoke(messages)
-        if response.content:
-            logger.info(f"Received diagram description for {task_name}")
-            return response.content.strip()
-        raise Exception("Empty response from GPT-4o vision")
-    except Exception as e:
-        logger.error(f"Error invoking GPT-4o vision for {task_name}: {e}")
-        raise
 
 def compress_image(image_data: bytes, max_width: int, max_height: int, quality: int) -> bytes:
     with Image.open(io.BytesIO(image_data)) as img:
@@ -310,7 +531,7 @@ def compress_image(image_data: bytes, max_width: int, max_height: int, quality: 
 async def upload_image_to_blob(image_data: bytes, document_id: str, page_num: int) -> str:
     blob_name = f"{document_id}/diagram_page_{page_num}.jpeg"
     try:
-        blob_client = blob_service_client.get_blob_client(container=settings.AZURE_STORAGE_CONTAINER_NAME, blob=blob_name)
+        blob_client = client_manager.blob_service_client.get_blob_client(container=settings.AZURE_STORAGE_CONTAINER_NAME, blob=blob_name)
         await blob_client.upload_blob(image_data, overwrite=True, content_type="image/jpeg")
         return blob_client.url
     except Exception as e:
