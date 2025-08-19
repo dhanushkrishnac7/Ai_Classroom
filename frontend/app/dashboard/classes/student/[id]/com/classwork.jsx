@@ -6,37 +6,55 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
-import { FileText, BookOpen, MoreVertical, Calendar as CalendarIcon, Activity as Assignment } from "lucide-react";
+import { MoreVertical, Calendar as CalendarIcon, Activity as Assignment } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 function Classwork({ classroomData, classInfo, loading }) {
+  const router = useRouter();
   const [date, setDate] = React.useState();
 
-  // Transform the classroomData prop into the format needed by the UI
-  const classworkItems = (classroomData?.upcoming_deadlines || []).map(work => {
-    const dueDate = new Date(work.due_date);
-    const today = new Date();
-    
-    // Remove the time part for accurate date comparison
-    today.setHours(0, 0, 0, 0); 
-    
-    const isOverdue = dueDate < today;
+  if (loading || !classroomData || !classroomData.all_content) {
+    return <div>Loading classwork...</div>;
+  }
 
-    return {
-      id: work.work_id,
-      title: work.work_title,
-      // Defaulting type to "Assignment" as the data is from "upcoming_deadlines"
-      type: "Assignment", 
-      // Format the date for display, e.g., "Aug 20"
-      displayDueDate: dueDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      status: isOverdue ? "Overdue" : "Upcoming",
-      isOverdue: isOverdue,
-    };
-  });
+  const { instructor } = classInfo;
+
+  const handleCardClick = (post) => {
+    const searchParams = new URLSearchParams({
+      type: post.type,
+      title: post.title,
+      documents: JSON.stringify(post.documents),
+      instructor: instructor || 'Instructor'
+    });
+
+    router.push(`/dashboard/classes/student/chat/${post.id}?${searchParams.toString()}`);
+  };
+
+  // ✅ MODIFIED: Added .filter() to only include items where type is 'work'
+  const classworkItems = classroomData.all_content
+    .filter(item => item.type === 'work')
+    .map(work => {
+      const dueDate = new Date(work.due_date);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const isOverdue = dueDate < today;
+
+      return {
+        id: work.work_id,
+        title: work.work_title,
+        type: "Assignment", // Since we only show 'work', we can hardcode this
+        displayDueDate: dueDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        status: isOverdue ? "Overdue" : "Upcoming",
+        isOverdue: isOverdue,
+        documents: work.documents || []
+      };
+    });
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold">Classwork</h2>
+        {/* Filter UI can be kept or removed depending on your needs */}
         <div className="flex space-x-2">
           <Popover>
             <PopoverTrigger asChild>
@@ -54,7 +72,6 @@ function Classwork({ classroomData, classInfo, loading }) {
               />
             </PopoverContent>
           </Popover>
-
           <Button variant="outline" size="sm">
             All topics
           </Button>
@@ -63,15 +80,13 @@ function Classwork({ classroomData, classInfo, loading }) {
 
       <div className="space-y-4">
         {classworkItems.map((item) => (
-          <Card key={item.id} className="hover:shadow-md transition-shadow">
+          <Card key={item.id} className="hover:shadow-md transition-shadow cursor-pointer"
+            onClick={() => handleCardClick(item)}>
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-4">
                   <div className="w-10 h-10 bg-teal-100 rounded-full flex items-center justify-center">
-                    {/* This logic can be expanded if your API provides a work_type */}
-                    {item.type === "Assignment" && <Assignment className="w-5 h-5 text-teal-600" />}
-                    {item.type === "Material" && <FileText className="w-5 h-5 text-teal-600" />}
-                    {item.type === "Test" && <BookOpen className="w-5 h-5 text-teal-600" />}
+                    <Assignment className="w-5 h-5 text-teal-600" />
                   </div>
                   <div>
                     <h3 className="font-medium">{item.title}</h3>
@@ -79,14 +94,12 @@ function Classwork({ classroomData, classInfo, loading }) {
                       <Badge variant="secondary" className="text-xs">
                         {item.type}
                       </Badge>
-                      {/* Updated to show the due date, which is more relevant */}
                       <span className="text-sm text-gray-500">Due {item.displayDueDate}</span>
                     </div>
                   </div>
                 </div>
                 <div className="flex items-center space-x-2">
                   <Badge
-                    // Updated logic to show destructive for overdue, default for upcoming
                     variant={item.isOverdue ? "destructive" : "default"}
                     className="text-xs"
                   >
