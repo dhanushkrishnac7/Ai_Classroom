@@ -54,7 +54,7 @@ function Classwork({ classroomData, classInfo, loading }) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold">Classwork</h2>
-        {/* Filter UI can be kept or removed depending on your needs */}
+         
         <div className="flex space-x-2">
           <Popover>
             <PopoverTrigger asChild>
