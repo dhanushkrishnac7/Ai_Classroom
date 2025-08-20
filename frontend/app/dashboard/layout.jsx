@@ -55,7 +55,7 @@ export default  function RootLayout({ children }) {
     };
     fetchdata();
   }, []);
-  // Show loading screen while fetching dashboard data
+  
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
