@@ -40,6 +40,7 @@ import { fetchdata } from "../../layout"
 function AppSidebar() {
   const { dashboardResponse, user } = useContext(fetchdata)
   console.log("user", user)
+  console.log("dash", dashboardResponse)
 
   // Helper function to generate consistent colors and create URL with parameters
   const createClassUrl = (cls, role) => {
@@ -66,7 +67,7 @@ function AppSidebar() {
     return `/dashboard/classes/${role}/${cls.classroomId}?${queryParams.toString()}`;
   };
 
-
+  
   return (
     <Sidebar collapsible="icon" className="text-base">
 
@@ -109,12 +110,12 @@ function AppSidebar() {
                   <CollapsibleContent className="p-3 ml-6 mt-1 space-y-1">
                     {dashboardResponse?.ownedClassrooms?.map((cls) => (
                       <SidebarMenuButton
-                        key={cls.classroomId}
+                        key={cls.id}
                         className="text-sm hover:bg-purple-100 hover:text-purple-700"
                         asChild
                       >
                         <Link href={createClassUrl(cls, 'teacher')}>
-                          {cls.classroomName}
+                          {cls.classname}
                         </Link>
                       </SidebarMenuButton>
                     ))}
