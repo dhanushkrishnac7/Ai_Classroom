@@ -57,14 +57,19 @@ function AppSidebar() {
       return colors[Math.abs(hash) % colors.length];
     };
 
+    // Use the correct ID field based on the data structure
+    const classId = cls.classroomId || cls.id;
+    const className = cls.classroomName || cls.classname;
+    const ownerName = cls.ownerName || 'You';
+
     const queryParams = new URLSearchParams({
-      name: cls.classroomName || '',
-      title: cls.classroomName || '',
-      instructor: cls.ownerName || '',
-      color: generateClassColor(cls.classroomName, cls.classroomId)
+      name: className || '',
+      title: className || '',
+      instructor: ownerName,
+      color: generateClassColor(className, classId)
     });
 
-    return `/dashboard/classes/${role}/${cls.classroomId}?${queryParams.toString()}`;
+    return `/dashboard/classes/${role}/${classId}?${queryParams.toString()}`;
   };
 
   
@@ -114,8 +119,8 @@ function AppSidebar() {
                         className="text-sm hover:bg-purple-100 hover:text-purple-700"
                         asChild
                       >
-                        <Link href={createClassUrl(cls, 'teacher')}>
-                          {cls.classname}
+                        <Link href={createClassUrl(cls, 'owner')}>
+                          {cls.classroomName || cls.classname}
                         </Link>
                       </SidebarMenuButton>
                     ))}
