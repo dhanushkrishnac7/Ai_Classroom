@@ -11,7 +11,9 @@ from fastapi.responses import JSONResponse
 from app.core.clients import client_manager
 from app.core.config import get_settings
 from app.schemas.classroom import (
-    DocumentsUploaded, VideoUploaded, BlogsUploaded, WorkAssigned
+    DocumentsUploaded, VideoUploaded, BlogsUploaded, WorkAssigned, 
+    CreateClassroomRequest, ClassroomResponse, AddStudentRequest, StudentAddedResponse,
+    AddAdminRequest, AdminAddedResponse, DeleteResponse
 )
 from app.services.auth import verify_token
 from app.services.rag_processing import upload_file_to_blob, validate_file
@@ -38,6 +40,414 @@ async def _verify_admin_or_owner(classroom_id: int, user_id: str) -> bool:
     except Exception as e:
         logger.error(f"Error verifying admin or owner for classroom {classroom_id}: {e}")
     return False
+
+async def _verify_owner_only(classroom_id: int, user_id: str) -> bool:
+    supabase = client_manager.get_supabase_client()
+    try:
+        owner_res = await asyncio.to_thread(
+            supabase.table("classrooms").select("owner_id").eq("id", classroom_id).single().execute
+        )
+        if owner_res.data and owner_res.data.get('owner_id') == user_id:
+            return True
+    except Exception as e:
+        logger.error(f"Error verifying owner for classroom {classroom_id}: {e}")
+    return False
+
+@router.post("/addclass", status_code=status.HTTP_201_CREATED, response_model=ClassroomResponse)
+async def create_classroom(
+    classroom_request: CreateClassroomRequest,
+    token: dict = Depends(verify_token)
+):
+    """
+    Create a new classroom with the authenticated user as the owner.
+    """
+    user_id = token["sub"]
+    supabase = client_manager.get_supabase_client()
+    
+    try:
+        # Create the classroom record
+        classroom_data = {
+            "classname": classroom_request.classname,
+            "owner_id": user_id
+        }
+        
+        response = await asyncio.to_thread(
+            supabase.table("classrooms").insert(classroom_data).execute
+        )
+        
+        if not response.data:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to create classroom: No data returned"
+            )
+        
+        created_classroom = response.data[0]
+        return ClassroomResponse.model_validate(created_classroom)
+        
+    except Exception as e:
+        logger.error(f"Error creating classroom for user {user_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create classroom: {str(e)}"
+        )
+
+@router.post("/classroom/{classroom_id}/add-student", status_code=status.HTTP_201_CREATED, response_model=StudentAddedResponse)
+async def add_student_to_classroom(
+    classroom_id: int,
+    student_request: AddStudentRequest,
+    token: dict = Depends(verify_token)
+):
+    """
+    Add a student to the classroom by email. Only classroom owners and admins can add students.
+    """
+    user_id = token["sub"]
+    supabase = client_manager.get_supabase_client()
+    
+    # Verify that the user is admin or owner of the classroom
+    if not await _verify_admin_or_owner(classroom_id, user_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, 
+            detail="Only admins or the owner can add students to the classroom."
+        )
+    
+    try:
+        # Check if the email is registered in the platform
+        user_query = await asyncio.to_thread(
+            supabase.table("profiles").select("id, user_name, full_name, email").eq("email", student_request.email).execute
+        )
+        
+        if not user_query.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Student is not registered on the platform"
+            )
+        
+        student_profile = user_query.data[0]
+        student_id = student_profile["id"]
+        
+        # Check if student is already enrolled in this classroom
+        existing_enrollment = await asyncio.to_thread(
+            supabase.table("students_of_classrooms").select("id").eq("classroom_id", classroom_id).eq("profile_id", student_id).execute
+        )
+        
+        if existing_enrollment.data:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Student is already enrolled in this classroom"
+            )
+        
+        # Check if student is the owner of the classroom
+        if student_id == user_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot add yourself as a student to your own classroom"
+            )
+        
+        # Check if student is an admin of the classroom
+        admin_check = await asyncio.to_thread(
+            supabase.table("admins_of_classrooms").select("id").eq("classroom_id", classroom_id).eq("profile_id", student_id).execute
+        )
+        
+        if admin_check.data:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot add an admin as a student to the classroom"
+            )
+        
+        # Add student to the classroom
+        student_enrollment_data = {
+            "classroom_id": classroom_id,
+            "profile_id": student_id
+        }
+        
+        enrollment_response = await asyncio.to_thread(
+            supabase.table("students_of_classrooms").insert(student_enrollment_data).execute
+        )
+        
+        if not enrollment_response.data:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to add student to classroom: No data returned"
+            )
+        
+        # Prepare response data
+        enrollment_record = enrollment_response.data[0]
+        response_data = {
+            "message": "Student added to classroom successfully",
+            "studentId": student_id,
+            "studentName": student_profile.get("full_name", student_profile.get("user_name", "")),
+            "studentEmail": student_profile["email"],
+            "classroomId": classroom_id,
+            "addedAt": enrollment_record["created_at"]
+        }
+        
+        return StudentAddedResponse.model_validate(response_data)
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions as they are
+        raise
+    except Exception as e:
+        logger.error(f"Error adding student to classroom {classroom_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to add student to classroom: {str(e)}"
+        )
+
+@router.post("/classroom/{classroom_id}/add-admin", status_code=status.HTTP_201_CREATED, response_model=AdminAddedResponse)
+async def add_admin_to_classroom(
+    classroom_id: int,
+    admin_request: AddAdminRequest,
+    token: dict = Depends(verify_token)
+):
+    """
+    Add an admin to the classroom by email. Only classroom owners can add admins.
+    """
+    user_id = token["sub"]
+    supabase = client_manager.get_supabase_client()
+    
+    # Verify that the user is the owner of the classroom (only owners can add admins)
+    if not await _verify_owner_only(classroom_id, user_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, 
+            detail="Only the classroom owner can add admins to the classroom."
+        )
+    
+    try:
+        # Check if the email is registered in the platform
+        user_query = await asyncio.to_thread(
+            supabase.table("profiles").select("id, user_name, full_name, email").eq("email", admin_request.email).execute
+        )
+        
+        if not user_query.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User is not registered on the platform"
+            )
+        
+        admin_profile = user_query.data[0]
+        admin_id = admin_profile["id"]
+        
+        # Check if user is already an admin in this classroom
+        existing_admin = await asyncio.to_thread(
+            supabase.table("admins_of_classrooms").select("id").eq("classroom_id", classroom_id).eq("profile_id", admin_id).execute
+        )
+        
+        if existing_admin.data:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="User is already an admin in this classroom"
+            )
+        
+        # Check if user is the owner of the classroom
+        if admin_id == user_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot add yourself as an admin to your own classroom"
+            )
+        
+        # Check if user is a student of the classroom
+        student_check = await asyncio.to_thread(
+            supabase.table("students_of_classrooms").select("id").eq("classroom_id", classroom_id).eq("profile_id", admin_id).execute
+        )
+        
+        if student_check.data:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot add a student as an admin to the classroom"
+            )
+        
+        # Add admin to the classroom
+        admin_data = {
+            "classroom_id": classroom_id,
+            "profile_id": admin_id
+        }
+        
+        admin_response = await asyncio.to_thread(
+            supabase.table("admins_of_classrooms").insert(admin_data).execute
+        )
+        
+        if not admin_response.data:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to add admin to classroom: No data returned"
+            )
+        
+        # Prepare response data
+        admin_record = admin_response.data[0]
+        response_data = {
+            "message": "Admin added to classroom successfully",
+            "adminId": admin_id,
+            "adminName": admin_profile.get("full_name", admin_profile.get("user_name", "")),
+            "adminEmail": admin_profile["email"],
+            "classroomId": classroom_id,
+            "addedAt": admin_record["created_at"]
+        }
+        
+        return AdminAddedResponse.model_validate(response_data)
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions as they are
+        raise
+    except Exception as e:
+        logger.error(f"Error adding admin to classroom {classroom_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to add admin to classroom: {str(e)}"
+        )
+
+@router.delete("/classroom/{classroom_id}/delete-admin/{admin_id}", status_code=status.HTTP_200_OK, response_model=DeleteResponse)
+async def delete_admin_from_classroom(
+    classroom_id: int,
+    admin_id: str,
+    token: dict = Depends(verify_token)
+):
+    """
+    Remove an admin from the classroom. Only classroom owners can delete admins.
+    """
+    user_id = token["sub"]
+    supabase = client_manager.get_supabase_client()
+    
+    # Verify that the user is the owner of the classroom (only owners can delete admins)
+    if not await _verify_owner_only(classroom_id, user_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, 
+            detail="Only the classroom owner can remove admins from the classroom."
+        )
+    
+    try:
+        # Check if the admin exists in this classroom
+        admin_query = await asyncio.to_thread(
+            supabase.table("admins_of_classrooms").select("id, created_at").eq("classroom_id", classroom_id).eq("profile_id", admin_id).execute
+        )
+        
+        if not admin_query.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Admin not found in this classroom"
+            )
+        
+        # Get admin profile information
+        admin_profile_query = await asyncio.to_thread(
+            supabase.table("profiles").select("id, user_name, full_name, email").eq("id", admin_id).execute
+        )
+        
+        if not admin_profile_query.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Admin profile not found"
+            )
+        
+        admin_profile = admin_profile_query.data[0]
+        
+        # Delete the admin from the classroom
+        delete_response = await asyncio.to_thread(
+            supabase.table("admins_of_classrooms").delete().eq("classroom_id", classroom_id).eq("profile_id", admin_id).execute
+        )
+        
+        if not delete_response.data:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to remove admin from classroom"
+            )
+        
+        # Prepare response data
+        response_data = {
+            "message": "Admin removed from classroom successfully",
+            "userId": admin_id,
+            "userName": admin_profile.get("full_name", admin_profile.get("user_name", "")),
+            "userEmail": admin_profile["email"],
+            "classroomId": classroom_id,
+            "deletedAt": delete_response.data[0]["created_at"]
+        }
+        
+        return DeleteResponse.model_validate(response_data)
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions as they are
+        raise
+    except Exception as e:
+        logger.error(f"Error removing admin from classroom {classroom_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to remove admin from classroom: {str(e)}"
+        )
+
+@router.delete("/classroom/{classroom_id}/delete-student/{student_id}", status_code=status.HTTP_200_OK, response_model=DeleteResponse)
+async def delete_student_from_classroom(
+    classroom_id: int,
+    student_id: str,
+    token: dict = Depends(verify_token)
+):
+    """
+    Remove a student from the classroom. Only classroom owners and admins can delete students.
+    """
+    user_id = token["sub"]
+    supabase = client_manager.get_supabase_client()
+    
+    # Verify that the user is admin or owner of the classroom
+    if not await _verify_admin_or_owner(classroom_id, user_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, 
+            detail="Only admins or the owner can remove students from the classroom."
+        )
+    
+    try:
+        # Check if the student exists in this classroom
+        student_query = await asyncio.to_thread(
+            supabase.table("students_of_classrooms").select("id, created_at").eq("classroom_id", classroom_id).eq("profile_id", student_id).execute
+        )
+        
+        if not student_query.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Student not found in this classroom"
+            )
+        
+        # Get student profile information
+        student_profile_query = await asyncio.to_thread(
+            supabase.table("profiles").select("id, user_name, full_name, email").eq("id", student_id).execute
+        )
+        
+        if not student_profile_query.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Student profile not found"
+            )
+        
+        student_profile = student_profile_query.data[0]
+        
+        # Delete the student from the classroom
+        delete_response = await asyncio.to_thread(
+            supabase.table("students_of_classrooms").delete().eq("classroom_id", classroom_id).eq("profile_id", student_id).execute
+        )
+        
+        if not delete_response.data:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to remove student from classroom"
+            )
+        
+        # Prepare response data
+        response_data = {
+            "message": "Student removed from classroom successfully",
+            "userId": student_id,
+            "userName": student_profile.get("full_name", student_profile.get("user_name", "")),
+            "userEmail": student_profile["email"],
+            "classroomId": classroom_id,
+            "deletedAt": delete_response.data[0]["created_at"]
+        }
+        
+        return DeleteResponse.model_validate(response_data)
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions as they are
+        raise
+    except Exception as e:
+        logger.error(f"Error removing student from classroom {classroom_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to remove student from classroom: {str(e)}"
+        )
 
 @router.post("/classroom/{classroom_id}/blog", status_code=status.HTTP_201_CREATED, response_model=BlogsUploaded)
 async def add_blog_to_classroom(
