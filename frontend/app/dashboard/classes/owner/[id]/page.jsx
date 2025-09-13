@@ -195,6 +195,8 @@ function Page() {
             classroomData={classroomData}
             classInfo={classInfo}
             loading={loading}
+            classroomId={id}
+            onRefresh={fetchClassroomData}
           />
         </TabsContent>
       </Tabs>

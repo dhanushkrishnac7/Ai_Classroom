@@ -154,7 +154,7 @@ export default function StudentForm({ open, onOpenChange, email }) {
     setButtonState("loading")
 
     try {
-      const response = await fetch(`http://localhost:8000/username/${userName}`)
+      const response = await fetch(`http://localhost:8000/api/username/${userName}`)
       const result = await response.json()
 
       if (result.isValid) {

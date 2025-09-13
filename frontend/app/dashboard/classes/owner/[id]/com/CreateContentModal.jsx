@@ -248,7 +248,7 @@ export function CreateContentModal({ isOpen, onClose, onSubmit, classroomId }) {
             <div className="relative">
               <Input
                 id="title"
-                placeholder="Title"
+             
                 value={formData.title}
                 onChange={(e) => handleInputChange("title", e.target.value)}
                 className={`border-0 border-b-2 rounded-none px-0 pb-2 pt-4 text-base placeholder:text-blue-600 focus-visible:ring-0 ${errors.title

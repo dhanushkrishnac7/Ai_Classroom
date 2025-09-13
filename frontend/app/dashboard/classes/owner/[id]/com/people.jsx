@@ -1,17 +1,33 @@
+import { useState } from "react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Card, CardContent } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
+import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { Plus, UserPlus, Trash2, Loader2, AlertTriangle, CheckCircle, AlertCircle } from "lucide-react"
+import { AddUserModal } from "./AddUserModal"
 
-function people({ classroomData, classInfo, loading }) {
+function people({ classroomData, classInfo, loading, classroomId, onRefresh }) {
+  const [isAddAdminModalOpen, setIsAddAdminModalOpen] = useState(false)
+  const [isAddStudentModalOpen, setIsAddStudentModalOpen] = useState(false)
+  const [removingStudents, setRemovingStudents] = useState(new Set())
+  const [removingAdmins, setRemovingAdmins] = useState(new Set())
+  const [confirmRemoval, setConfirmRemoval] = useState(null)
+  const [notification, setNotification] = useState(null)
+
+  console.log("People component - classroomId:", classroomId)
+
   if (loading) {
     return <div className="flex justify-center items-center h-64">Loading people...</div>;
   }
 
 
   const enrolledStudents = classroomData?.members?.students || [];
+  const enrolledAdmins = classroomData?.members?.admins || [];
   const classOwnerName = classroomData?.class_owner || classInfo?.instructor || '';
 
   console.log("Enrolled Students-->", enrolledStudents);
+  console.log("Enrolled Admins-->", enrolledAdmins);
   console.log("Class Owner-->", classOwnerName);
 
   const generateAvatarColor = (name) => {
@@ -36,15 +52,33 @@ function people({ classroomData, classInfo, loading }) {
   };
 
 
-  // Prepare teachers array with class owner
+  // Prepare teachers array with class owner and admins
   const teachers = [];
+
+  // Add class owner as primary instructor
   if (classOwnerName) {
     teachers.push({
       name: classOwnerName,
       avatar: classOwnerName.charAt(0).toUpperCase(),
-      color: "bg-teal-500"
+      color: "bg-teal-500",
+      role: "Instructor",
+      isOwner: true
     });
   }
+
+  // Add admins as additional teachers
+  enrolledAdmins.forEach((admin, index) => {
+    const adminName = admin.full_name || admin.user_name || `Admin ${index + 1}`;
+    teachers.push({
+      name: adminName,
+      username: admin.user_name || '',
+      avatar: adminName.charAt(0).toUpperCase(),
+      color: generateAvatarColor(adminName),
+      role: "Admin",
+      userId: admin.id,
+      isOwner: false
+    });
+  });
 
 
   const students = enrolledStudents.map((student, index) => ({
@@ -55,15 +89,164 @@ function people({ classroomData, classInfo, loading }) {
     userId: student.id
   }));
 
+  const handleAddAdmin = (result) => {
+    console.log("Admin added successfully:", result)
+    if (onRefresh) {
+      onRefresh()
+    }
+  }
+
+  const handleAddStudent = (result) => {
+    console.log("Students added successfully:", result)
+    if (onRefresh) {
+      onRefresh()
+    }
+  }
+
+  const handleRemoveStudent = (studentId, studentName) => {
+    setConfirmRemoval({ type: 'student', userId: studentId, userName: studentName })
+  }
+
+  const handleRemoveAdmin = (adminId, adminName) => {
+    setConfirmRemoval({ type: 'admin', userId: adminId, userName: adminName })
+  }
+
+  const confirmRemoveUser = async () => {
+    if (!confirmRemoval) return
+
+    const { type, userId, userName } = confirmRemoval
+    const isStudent = type === 'student'
+    const isAdmin = type === 'admin'
+
+    // Close confirmation modal and add user to removing set
+    setConfirmRemoval(null)
+    if (isStudent) {
+      setRemovingStudents(prev => new Set([...prev, userId]))
+    } else if (isAdmin) {
+      setRemovingAdmins(prev => new Set([...prev, userId]))
+    }
+
+    try {
+      const token = document.cookie
+        .split('; ')
+        .find(row => row.startsWith('token='))
+        ?.split('=')[1];
+
+      if (!token) {
+        setNotification({
+          type: 'error',
+          message: 'Authentication Error',
+          details: 'Please log in again to continue.'
+        })
+        return
+      }
+
+      const endpoint = isStudent
+        ? `http://localhost:8000/api/classroom/${classroomId}/delete-student/${userId}`
+        : `http://localhost:8000/api/classroom/${classroomId}/delete-admin/${userId}`
+
+      console.log(`Removing ${type} ${userId} from classroom ${classroomId}`)
+
+      const response = await fetch(endpoint, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        }
+      })
+
+      if (response.ok) {
+        console.log(`${type} ${userName} removed successfully`)
+
+        // Show success notification
+        setNotification({
+          type: 'success',
+          message: `${isStudent ? 'Student' : 'Admin'} Removed Successfully`,
+          details: `${userName} has been removed from the classroom. The list will update automatically.`
+        })
+
+        // Refresh the people data instead of full page reload
+        if (onRefresh) {
+          onRefresh()
+        }
+
+        // Auto-close notification after 2 seconds
+        setTimeout(() => {
+          setNotification(null)
+        }, 2000)
+
+      } else {
+        const errorData = await response.json().catch(() => ({}))
+        console.error(`Failed to remove ${type}:`, response.status, errorData)
+
+        let errorMessage = `Failed to remove ${type}`
+        let errorDetails = 'Please try again.'
+
+        if (errorData.detail) {
+          errorDetails = errorData.detail
+        } else if (errorData.message) {
+          errorDetails = errorData.message
+        }
+
+        setNotification({
+          type: 'error',
+          message: errorMessage,
+          details: errorDetails
+        })
+      }
+    } catch (error) {
+      console.error(`Error removing ${type}:`, error)
+
+      setNotification({
+        type: 'error',
+        message: 'Network Error',
+        details: 'Could not connect to server. Please check your connection and try again.'
+      })
+    } finally {
+      // Remove user from removing set
+      if (isStudent) {
+        setRemovingStudents(prev => {
+          const newSet = new Set(prev)
+          newSet.delete(userId)
+          return newSet
+        })
+      } else if (isAdmin) {
+        setRemovingAdmins(prev => {
+          const newSet = new Set(prev)
+          newSet.delete(userId)
+          return newSet
+        })
+      }
+    }
+  }
+
+  const cancelRemoveUser = () => {
+    setConfirmRemoval(null)
+  }
+
   return (
     <div className="space-y-8">
 
       <div>
-        <h2 className="text-2xl font-bold mb-6">Teachers</h2>
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl font-bold">Teachers</h2>
+          <div className="flex items-center gap-4">
+            <span className="text-gray-500">{teachers.length} teacher{teachers.length !== 1 ? 's' : ''}</span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsAddAdminModalOpen(true)}
+              className="flex items-center gap-2"
+            >
+              <UserPlus className="h-4 w-4" />
+              Add Admin
+            </Button>
+          </div>
+        </div>
         <div className="space-y-4">
           {teachers.length > 0 ? (
             teachers.map((teacher, index) => (
-              <Card key={index} className="border-0 shadow-none">
+              <Card key={teacher.userId || index} className="border-0 shadow-none">
                 <CardContent className="p-4">
                   <div className="flex items-center space-x-4">
                     <Avatar className="w-12 h-12">
@@ -73,10 +256,39 @@ function people({ classroomData, classInfo, loading }) {
                     </Avatar>
                     <div className="flex-1">
                       <h3 className="font-medium text-lg">{teacher.name}</h3>
-                      <span className="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full mt-1">
-                        Instructor
+                      {teacher.username && (
+                        <p className="text-sm text-gray-500">@{teacher.username}</p>
+                      )}
+                      <span className={`inline-block text-xs px-2 py-1 rounded-full mt-1 ${teacher.isOwner
+                        ? 'bg-blue-100 text-blue-800'
+                        : 'bg-purple-100 text-purple-800'
+                        }`}>
+                        {teacher.role}
                       </span>
                     </div>
+                    {!teacher.isOwner && (
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleRemoveAdmin(teacher.userId, teacher.name)}
+                          disabled={removingAdmins.has(teacher.userId)}
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                        >
+                          {removingAdmins.has(teacher.userId) ? (
+                            <>
+                              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                              Removing...
+                            </>
+                          ) : (
+                            <>
+                              <Trash2 className="h-4 w-4 mr-1" />
+                              Remove
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -95,7 +307,18 @@ function people({ classroomData, classInfo, loading }) {
       <div>
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-2xl font-bold">Classmates</h2>
-          <span className="text-gray-500">{students.length} students</span>
+          <div className="flex items-center gap-4">
+            <span className="text-gray-500">{students.length} students</span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsAddStudentModalOpen(true)}
+              className="flex items-center gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              Add Students
+            </Button>
+          </div>
         </div>
         <div className="space-y-4">
           {students.length > 0 ? (
@@ -110,10 +333,30 @@ function people({ classroomData, classInfo, loading }) {
                     </Avatar>
                     <div className="flex-1">
                       <h3 className="font-medium text-lg">{student.name}</h3>
-
                       <span className="inline-block bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full mt-1">
                         Student
                       </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleRemoveStudent(student.userId, student.name)}
+                        disabled={removingStudents.has(student.userId)}
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                      >
+                        {removingStudents.has(student.userId) ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                            Removing...
+                          </>
+                        ) : (
+                          <>
+                            <Trash2 className="h-4 w-4 mr-1" />
+                            Remove
+                          </>
+                        )}
+                      </Button>
                     </div>
                   </div>
                 </CardContent>
@@ -126,6 +369,95 @@ function people({ classroomData, classInfo, loading }) {
           )}
         </div>
       </div>
+
+      {/* Add Admin Modal */}
+      <AddUserModal
+        isOpen={isAddAdminModalOpen}
+        onClose={() => setIsAddAdminModalOpen(false)}
+        onSubmit={handleAddAdmin}
+        userType="admin"
+        classroomId={classroomId}
+        onRefresh={onRefresh}
+      />
+
+      {/* Add Student Modal */}
+      <AddUserModal
+        isOpen={isAddStudentModalOpen}
+        onClose={() => setIsAddStudentModalOpen(false)}
+        onSubmit={handleAddStudent}
+        userType="student"
+        classroomId={classroomId}
+        onRefresh={onRefresh}
+      />
+
+      {/* Confirmation Modal */}
+      <Dialog open={!!confirmRemoval} onOpenChange={() => setConfirmRemoval(null)}>
+        <DialogContent className="sm:max-w-md bg-white">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-normal text-gray-800 flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-red-600" />
+              Remove {confirmRemoval?.type === 'student' ? 'Student' : 'Admin'}
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="py-4">
+            <p className="text-gray-600 mb-2">
+              Are you sure you want to remove <span className="font-semibold text-gray-800">{confirmRemoval?.userName}</span> from this classroom?
+            </p>
+            <p className="text-sm text-red-600">
+              This action cannot be undone. The {confirmRemoval?.type === 'student' ? 'student' : 'admin'} will lose access to all classroom materials and assignments.
+            </p>
+          </div>
+
+          <DialogFooter className="flex justify-end gap-2">
+            <Button
+              variant="ghost"
+              onClick={cancelRemoveUser}
+              className="text-gray-600 hover:bg-gray-50"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={confirmRemoveUser}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Remove {confirmRemoval?.type === 'student' ? 'Student' : 'Admin'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Notification Modal */}
+      {notification && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md mx-4 shadow-xl">
+            <div className={`flex items-start gap-3 ${notification.type === 'success' ? 'text-green-800' : 'text-red-800'
+              }`}>
+              {notification.type === 'success' ? (
+                <CheckCircle className="h-6 w-6 text-green-600 mt-0.5 flex-shrink-0" />
+              ) : (
+                <AlertCircle className="h-6 w-6 text-red-600 mt-0.5 flex-shrink-0" />
+              )}
+              <div className="flex-1">
+                <h3 className="font-semibold text-lg mb-2">{notification.message}</h3>
+                <p className="text-sm opacity-90 mb-4">{notification.details}</p>
+                <div className="flex justify-end">
+                  <Button
+                    onClick={() => setNotification(null)}
+                    className={`${notification.type === 'success'
+                      ? 'bg-green-600 hover:bg-green-700'
+                      : 'bg-red-600 hover:bg-red-700'
+                      } text-white`}
+                  >
+                    OK
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

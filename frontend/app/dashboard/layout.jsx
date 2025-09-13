@@ -12,48 +12,50 @@ export default  function RootLayout({ children }) {
   const [user, setUser] = useState("");
   const [dashboardResponse, setDashboardResponse] = useState(null);
   const [isLoading, setIsLoading] = useState(true); 
-  useEffect(() => {
-    const fetchdata = async () => {
-      setIsLoading(true);
-      const token = document.cookie
-        .split('; ')
-        .find(row => row.startsWith('token='))
-        ?.split('=')[1];
 
-      if (token) {
-        try {
-          const payload = jwtDecode(token);
-          if (payload) setUser(payload);
-        } catch (e) {
-          console.error("Invalid token", e);
-        }
-      }
-      
-      console.log("Fetching classes...");
+  const fetchDashboardData = async () => {
+    setIsLoading(true);
+    const token = document.cookie
+      .split('; ')
+      .find(row => row.startsWith('token='))
+      ?.split('=')[1];
+
+    if (token) {
       try {
-        const res = await fetch("http://localhost:8000/api/dashboard", {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          }
-        });
-        
-        if (res.status === 440) {
-          setshowstudentform(true);
-        }
-       
-        const data = await res.json();
-        setDashboardResponse(data);
-        console.log("Response -->", data);
+        const payload = jwtDecode(token);
+        if (payload) setUser(payload);
       } catch (e) {
-        console.error("Dashboard fetch error:", e);
-        setDashboardResponse({ error: "Failed to fetch dashboard data" });
-      } finally {
-        setIsLoading(false);
+        console.error("Invalid token", e);
       }
-    };
-    fetchdata();
+    }
+    
+    console.log("Fetching classes...");
+    try {
+      const res = await fetch("http://localhost:8000/api/dashboard", {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        }
+      });
+      
+      if (res.status === 440) {
+        setshowstudentform(true);
+      }
+     
+      const data = await res.json();
+      setDashboardResponse(data);
+      console.log("Response -->", data);
+    } catch (e) {
+      console.error("Dashboard fetch error:", e);
+      setDashboardResponse({ error: "Failed to fetch dashboard data" });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDashboardData();
   }, []);
   
   if (isLoading) {
@@ -69,7 +71,7 @@ export default  function RootLayout({ children }) {
   }
 
   return (
-    <fetchdata.Provider value={{dashboardResponse,user,showstudentform,setshowstudentform,isLoading}}>
+    <fetchdata.Provider value={{dashboardResponse,user,showstudentform,setshowstudentform,isLoading,refreshDashboard: fetchDashboardData}}>
       <div>
       <SidebarProvider>
         <AppSidebar  />

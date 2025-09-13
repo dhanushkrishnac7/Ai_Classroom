@@ -9,9 +9,11 @@ function people({ classroomData, classInfo, loading }) {
 
 
   const enrolledStudents = classroomData?.members?.students || [];
+  const enrolledAdmins = classroomData?.members?.admins || [];
   const classOwnerName = classroomData?.class_owner || classInfo?.instructor || '';
 
   console.log("Enrolled Students-->", enrolledStudents);
+  console.log("Enrolled Admins-->", enrolledAdmins);
   console.log("Class Owner-->", classOwnerName);
 
   const generateAvatarColor = (name) => {
@@ -36,15 +38,33 @@ function people({ classroomData, classInfo, loading }) {
   };
 
 
-  // Prepare teachers array with class owner
+  // Prepare teachers array with class owner and admins
   const teachers = [];
+  
+  // Add class owner as primary instructor
   if (classOwnerName) {
     teachers.push({
       name: classOwnerName,
       avatar: classOwnerName.charAt(0).toUpperCase(),
-      color: "bg-teal-500"
+      color: "bg-teal-500",
+      role: "Instructor",
+      isOwner: true
     });
   }
+
+  // Add admins as additional teachers
+  enrolledAdmins.forEach((admin, index) => {
+    const adminName = admin.full_name || admin.user_name || `Admin ${index + 1}`;
+    teachers.push({
+      name: adminName,
+      username: admin.user_name || '',
+      avatar: adminName.charAt(0).toUpperCase(),
+      color: generateAvatarColor(adminName),
+      role: "Admin",
+      userId: admin.id,
+      isOwner: false
+    });
+  });
 
 
   const students = enrolledStudents.map((student, index) => ({
@@ -59,11 +79,14 @@ function people({ classroomData, classInfo, loading }) {
     <div className="space-y-8">
 
       <div>
-        <h2 className="text-2xl font-bold mb-6">Teachers</h2>
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl font-bold">Teachers</h2>
+          <span className="text-gray-500">{teachers.length} teacher{teachers.length !== 1 ? 's' : ''}</span>
+        </div>
         <div className="space-y-4">
           {teachers.length > 0 ? (
             teachers.map((teacher, index) => (
-              <Card key={index} className="border-0 shadow-none">
+              <Card key={teacher.userId || index} className="border-0 shadow-none">
                 <CardContent className="p-4">
                   <div className="flex items-center space-x-4">
                     <Avatar className="w-12 h-12">
@@ -73,8 +96,15 @@ function people({ classroomData, classInfo, loading }) {
                     </Avatar>
                     <div className="flex-1">
                       <h3 className="font-medium text-lg">{teacher.name}</h3>
-                      <span className="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full mt-1">
-                        Instructor
+                      {teacher.username && (
+                        <p className="text-sm text-gray-500">@{teacher.username}</p>
+                      )}
+                      <span className={`inline-block text-xs px-2 py-1 rounded-full mt-1 ${
+                        teacher.isOwner 
+                          ? 'bg-blue-100 text-blue-800' 
+                          : 'bg-purple-100 text-purple-800'
+                      }`}>
+                        {teacher.role}
                       </span>
                     </div>
                   </div>
