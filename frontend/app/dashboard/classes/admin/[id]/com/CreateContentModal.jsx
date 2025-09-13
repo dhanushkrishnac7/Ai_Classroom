@@ -82,7 +82,7 @@ export function CreateContentModal({ isOpen, onClose, onSubmit, classroomId }) {
         formDataToSend.append("work_title", formData.title)
         formDataToSend.append("work_description", formData.context)
 
-        
+
         const dateObj = new Date(formData.dueDate)
         const formattedDate = `${dateObj.getDate().toString().padStart(2, '0')}-${(dateObj.getMonth() + 1).toString().padStart(2, '0')}-${dateObj.getFullYear()}`
         formDataToSend.append("due_date", formattedDate)
@@ -90,7 +90,7 @@ export function CreateContentModal({ isOpen, onClose, onSubmit, classroomId }) {
         console.log("Original date:", formData.dueDate)
         console.log("Formatted date:", formattedDate)
       } else {
-       
+
         formDataToSend.append("title", formData.title)
         formDataToSend.append("context", formData.context)
       }
@@ -248,7 +248,7 @@ export function CreateContentModal({ isOpen, onClose, onSubmit, classroomId }) {
             <div className="relative">
               <Input
                 id="title"
-                placeholder="Title"
+
                 value={formData.title}
                 onChange={(e) => handleInputChange("title", e.target.value)}
                 className={`border-0 border-b-2 rounded-none px-0 pb-2 pt-4 text-base placeholder:text-blue-600 focus-visible:ring-0 ${errors.title

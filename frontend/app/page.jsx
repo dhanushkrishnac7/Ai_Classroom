@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button'
 import { useState } from 'react'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { AuthModal } from './auth-modal'
-import { Shield, Zap} from 'lucide-react'
+import { Shield, Zap } from 'lucide-react'
 
 export default function Home() {
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -36,13 +36,13 @@ export default function Home() {
                   background: "linear-gradient(135deg, #2563eb, #9333ea)",
                 }}
               />
-            <Button
-              onClick={() => openModal('signin')}
-              variant="ghost"
-              className="relative font-medium"
-            >
-              Sign In
-            </Button>
+              <Button
+                onClick={() => openModal('signin')}
+                variant="ghost"
+                className="relative font-medium"
+              >
+                Sign In
+              </Button>
             </div>
             <div className='relative group'>
               <div
@@ -51,18 +51,18 @@ export default function Home() {
                   background: "linear-gradient(135deg, #2563eb, #9333ea)",
                 }}
               />
-            <Button
-              onClick={() => openModal('signup')}
-              className="relative font-medium shadow-lg  hover:transition-all duration-200 transform hover:scale-105"
-            >
-              Get Started
-            </Button>
+              <Button
+                onClick={() => openModal('signup')}
+                className="relative font-medium shadow-lg  hover:transition-all duration-200 transform hover:scale-105"
+              >
+                Get Started
+              </Button>
             </div>
           </div>
         </div>
       </header>
 
-     
+
       <main className="flex flex-col items-center justify-center px-6 py-20">
         <div className="max-w-4xl mx-auto text-center">
           <h1 className="text-5xl md:text-6xl font-bold text-foreground mb-6 leading-tight">
@@ -71,7 +71,7 @@ export default function Home() {
           </h1>
 
           <p className="text-xl text-muted-foreground mb-12 max-w-2xl mx-auto leading-relaxed">
-            Experience seamless authentication with our modern, secure platform. 
+            Experience seamless authentication with our modern, secure platform.
             Join thousands of users who trust us with their digital identity.
           </p>
 
@@ -83,13 +83,13 @@ export default function Home() {
                   background: "linear-gradient(135deg, #2563eb, #9333ea)",
                 }}
               />
-            <Button
-              onClick={() => openModal('signup')}
-              size="lg"
-              className="relative w-full text-white bg-gradient-to-r from-black to-black sm:w-auto text-lg font-semibold h-14 px-8 shadow-lg hover:transition-all duration-200 transform hover:scale-105"
-            >
-              Create Account
-            </Button>
+              <Button
+                onClick={() => openModal('signup')}
+                size="lg"
+                className="relative w-full text-white bg-gradient-to-r from-black to-black sm:w-auto text-lg font-semibold h-14 px-8 shadow-lg hover:transition-all duration-200 transform hover:scale-105"
+              >
+                Create Account
+              </Button>
             </div>
             <div className='relative group'>
               <div
@@ -98,20 +98,20 @@ export default function Home() {
                   background: "linear-gradient(135deg, #2563eb, #9333ea)",
                 }}
               />
-            <Button
-              onClick={() => openModal('signin')}
-              variant="outline"
-              size="lg"
-              className="relative w-full sm:w-auto text-lg font-semibold h-14 px-8 shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
-            >
-              Sign In
-            </Button>
+              <Button
+                onClick={() => openModal('signin')}
+                variant="outline"
+                size="lg"
+                className="relative w-full sm:w-auto text-lg font-semibold h-14 px-8 shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
+              >
+                Sign In
+              </Button>
             </div>
           </div>
 
           <div className="grid md:grid-cols-3 gap-8 max-w-3xl mx-auto">
 
-            
+
             <div className="relative group">
               <div
                 className="absolute -inset-1.5 rounded-xl opacity-0 blur-sm group-hover:opacity-90 z-0 transition-opacity duration-300"
@@ -132,8 +132,8 @@ export default function Home() {
               </Card>
             </div>
 
-           
-          <div className="relative group">
+
+            <div className="relative group">
               <div
                 className="absolute -inset-1.5 rounded-xl opacity-0 blur-sm group-hover:opacity-90 z-0 transition-opacity duration-300"
                 style={{
@@ -154,7 +154,7 @@ export default function Home() {
             </div>
 
 
-           <div className="relative group">
+            <div className="relative group">
               <div
                 className="absolute -inset-1.5 rounded-xl opacity-0 blur-sm group-hover:opacity-90 z-0 transition-opacity duration-300"
                 style={{
@@ -178,7 +178,7 @@ export default function Home() {
         </div>
       </main>
 
-   
+
       <footer className="w-full px-6 py-8 mt-20">
         <div className="max-w-7xl mx-auto text-center text-muted-foreground">
           <p>&copy; 2025 AuthFlow. All rights reserved.</p>

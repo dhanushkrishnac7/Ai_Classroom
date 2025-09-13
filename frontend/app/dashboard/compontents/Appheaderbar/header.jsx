@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useContext } from "react"
 import { usePathname, useSearchParams } from "next/navigation"
 import { Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -16,19 +16,27 @@ import {
 } from "@/components/ui/breadcrumb"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { CreateClassModal } from "./CreateClassModal"
+import { fetchdata } from "../../layout"
 
 function StaticHeader() {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const { refreshDashboard } = useContext(fetchdata)
 
   const name = searchParams.get("title")
 
   const currentPage = name
 
-  const handleCreateClass = (classData) => {
+  // Check if we're on the dashboard page
+  const isDashboardPage = pathname === '/dashboard'
+
+  const handleCreateClass = async (classData) => {
     console.log("Creating class:", classData)
-  
+    // Refresh the dashboard data after successful class creation
+    if (refreshDashboard) {
+      await refreshDashboard()
+    }
   }
 
   return (
@@ -49,19 +57,20 @@ function StaticHeader() {
       </Breadcrumb>
 
       <div className="ml-auto flex items-center space-x-4">
-
-        <Button variant="ghost" size="sm" onClick={() => setIsModalOpen(true)}>
-          <Plus className="h-4 w-4" />
-        </Button>
-
-
+        {isDashboardPage && (
+          <Button variant="ghost" size="sm" onClick={() => setIsModalOpen(true)}>
+            <Plus className="h-4 w-4" />
+          </Button>
+        )}
       </div>
 
-      <CreateClassModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onSubmit={handleCreateClass}
-      />
+      {isDashboardPage && (
+        <CreateClassModal
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          onSubmit={handleCreateClass}
+        />
+      )}
     </header>
   )
 }

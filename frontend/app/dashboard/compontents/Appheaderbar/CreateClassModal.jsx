@@ -21,27 +21,51 @@ export function CreateClassModal({ isOpen, onClose, onSubmit }) {
             setErrors((prev) => ({ ...prev, className: undefined }))
         }
     }
-
-    const handleSubmit = () => {
+    const handleSubmit = async () => {
         const newErrors = {}
         if (!formData.className.trim()) {
             newErrors.className = "Class name is required"
-        }
-
-        if (Object.keys(newErrors).length > 0) {
             setErrors(newErrors)
             return
         }
 
-        onSubmit(formData)
-        setFormData({
-            className: "",
-            section: "",
-            subject: "",
-            room: "",
-        })
-        setErrors({})
-        onClose()
+        try {
+            const token = document.cookie.split('; ').find(row => row.startsWith('token='))?.split('=')[1];
+
+            const response = await fetch("http://localhost:8000/api/addclass", {
+                method: "POST",
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    classname: formData.className,
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const result = await response.json();
+            console.log("Class created successfully:", result);
+
+            // Reset form first
+            setFormData({
+                className: "",
+                section: "",
+                subject: "",
+                room: "",
+            });
+            setErrors({});
+            onClose();
+
+            // Call onSubmit after successful creation to trigger refresh
+            onSubmit(result);
+        } catch (err) {
+            console.error("Error creating class:", err);
+            setErrors({ submit: "Failed to create class. Please try again." });
+        }
     }
 
     const handleCancel = () => {
@@ -73,8 +97,8 @@ export function CreateClassModal({ isOpen, onClose, onSubmit }) {
                                 value={formData.className}
                                 onChange={(e) => handleInputChange("className", e.target.value)}
                                 className={`border-0 border-b-2 rounded-none px-0 pb-2 pt-4 text-base placeholder:text-blue-600 focus-visible:ring-0 ${errors.className
-                                        ? "border-red-500 focus-visible:border-red-500"
-                                        : "border-blue-600 focus-visible:border-blue-700"
+                                    ? "border-red-500 focus-visible:border-red-500"
+                                    : "border-blue-600 focus-visible:border-blue-700"
                                     }`}
                             />
                             <Label
@@ -141,6 +165,10 @@ export function CreateClassModal({ isOpen, onClose, onSubmit }) {
                             </Label>
                         </div>
                     </div>
+
+                    {errors.submit && (
+                        <p className="text-sm text-red-500">{errors.submit}</p>
+                    )}
                 </div>
 
                 <DialogFooter className="flex justify-end gap-2">

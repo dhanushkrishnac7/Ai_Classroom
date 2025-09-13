@@ -14,13 +14,13 @@ export default function HomePage() {
       <StudentForm open={showstudentform} onOpenChange={setshowstudentform} email={user.email} />
       <SidebarProvider>
         <SidebarInset >
-          
+
           <div className="bg-[#f5f5f5]">
-             <Ownedclasses /> 
-              <Adminclasses/>  
-            <Myclasses /> 
+            <Ownedclasses />
+            <Adminclasses />
+            <Myclasses />
           </div>
-          
+
         </SidebarInset>
       </SidebarProvider>
     </>
